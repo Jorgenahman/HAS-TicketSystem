@@ -1,7 +1,14 @@
 "use strict";
 /* Ärendehantering – webbgränssnitt (ingen extern kod) */
 
-const S = { user: null, users: [], categories: [], priorities: [], statuses: [], closed: ["Klar", "Avslag"], bookingCat: null };
+const S = { user: null, users: [], categories: [], priorities: [], statusList: [], statuses: [], closed: [], bookingCat: null };
+function setStatuses(list) {
+  S.statusList = list || [];
+  S.statuses = S.statusList.map(x => x.name);
+  S.closed = S.statusList.filter(x => x.closed).map(x => x.name);
+}
+const statusInfo = name => S.statusList.find(x => x.name === name) || { name, color: "grey", closed: 0, locked: 0 };
+const statusPill = name => `<span class="spill sc-${statusInfo(name).color}">${esc(name)}</span>`;
 const root = document.getElementById("root");
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
@@ -70,7 +77,7 @@ function savePref(key, v) { try { localStorage.setItem("ts." + key, JSON.stringi
 async function boot() {
   try {
     const st = await api("GET", "/api/status");
-    S.priorities = st.priorities; S.statuses = st.statuses; S.closed = st.closed_statuses || S.closed; S.bookingCat = st.booking_category_id || null;
+    S.priorities = st.priorities; setStatuses(st.status_list); S.bookingCat = st.booking_category_id || null;
     if (st.setup_needed) return showSetup();
     if (!st.user) return showAuth();
     S.user = st.user;
@@ -82,7 +89,7 @@ async function boot() {
 }
 async function loadRefs() {
   const [u, c, st] = await Promise.all([api("GET", "/api/users"), api("GET", "/api/categories"), api("GET", "/api/status")]);
-  S.users = u.items; S.categories = c.items; S.bookingCat = st.booking_category_id || null;
+  S.users = u.items; S.categories = c.items; S.bookingCat = st.booking_category_id || null; setStatuses(st.status_list);
   if (st.user) S.user = st.user;
 }
 
@@ -136,7 +143,7 @@ async function logout() {
 
 /* ---------------- skal ---------------- */
 function shell(active, title, layout = "") {
-  const nav = [["dashboard", "Dashboard", ICON.dash], ["tickets", "Ärenden", ICON.tickets], ["customers", "Kunder", ICON.customers], ["settings", "Inställningar", ICON.settings]];
+  const nav = [["dashboard", "Dashboard", ICON.dash], ["tickets", "Ärenden", ICON.tickets], ["customers", "Beställare", ICON.customers], ["settings", "Inställningar", ICON.settings]];
   root.innerHTML = `<div class="shell">
     <aside class="side">
       <div class="me">${avatar("lg")}<div class="name">${esc(S.user.name)}</div><div class="role">${S.user.role === "admin" ? "Administratör" : "Handläggare"}</div></div>
@@ -237,8 +244,8 @@ async function loadDashboard() {
       ${card("high", "Hög prioritet", "#/tickets?status=open&priority=H%C3%B6g")}
     </div>
     <div class="rings">
-      ${ring(d.created ? (d.created_closed + (d.created_rejected || 0)) / d.created : 0, "Avslutade i perioden", `${d.created_closed} klara och ${d.created_rejected || 0} avslag av ${d.created} ärenden som skapades i perioden`)}
-      ${ring(d.customers_total ? d.customers_new / d.customers_total : 0, "Nya kunder", `${d.customers_new} ${d.customers_new === 1 ? "ny kund" : "nya kunder"}<br>${ret} återkommande`)}
+      ${ring(d.created ? d.created_closed / d.created : 0, "Avslutade i perioden", `${(d.closed_breakdown || []).map(x => `${x.n} ${esc(x.name.toLowerCase())}`).join(", ") || "0"} av ${d.created} ärenden som skapades i perioden`)}
+      ${ring(d.customers_total ? d.customers_new / d.customers_total : 0, "Nya beställare", `${d.customers_new} ${d.customers_new === 1 ? "ny beställare" : "nya beställare"}<br>${ret} återkommande`)}
     </div>
     <h2 class="sec-title">Skapade och avslutade per dag</h2>
     <div class="chart-wrap">
@@ -318,11 +325,11 @@ async function pageTickets(query) {
   const el = shell("tickets", "Ärenden");
   let customers = [];
   try { customers = (await api("GET", "/api/customers")).items; } catch (e) {}
-  const views = [["open", "Öppna (Ny och Pågår)"], ["", "Alla utom arkiverade"], ["Ny", "Ny"], ["Pågår", "Pågår"], ["Klar", "Klar"], ["Avslag", "Avslag"], ["closed", "Klar och Avslag"], ["archived", "Arkiverade"]];
+  const views = [["open", "Öppna (ej avslutade)"], ["", "Alla utom arkiverade"], ...S.statuses.map(x => [x, x]), ["closed", "Alla avslutade"], ["archived", "Arkiverade"]];
   el.innerHTML = `<section class="work">
     <div class="toolbar">
       <label class="check"><input type="checkbox" id="sel-all"> Markera alla</label>
-      <button class="textbtn" id="b-close" type="button" disabled>Markera klar</button>
+      <select class="sortsel" id="b-status" disabled aria-label="Ändra status på markerade"><option value="">Ändra status …</option>${S.statuses.map(x => `<option>${esc(x)}</option>`).join("")}</select>
       <button class="textbtn" id="b-archive" type="button" disabled>Arkivera</button>
       <button class="textbtn danger" id="b-delete" type="button" disabled>Ta bort</button>
       <label class="check">Sortera:
@@ -330,7 +337,7 @@ async function pageTickets(query) {
           ${[["date_desc", "Datum, nyast"], ["date_asc", "Datum, äldst"], ["priority", "Prioritet"], ["status", "Status"], ["updated", "Senast ändrad"]].map(([v, l]) => `<option value="${v}"${TF.sort === v ? " selected" : ""}>${l}</option>`).join("")}
         </select></label>
       <span class="grow"></span>
-      <input class="input search" id="t-q" type="search" placeholder="Sök ärende, kund eller nummer" value="${esc(TF.q)}" aria-label="Sök">
+      <input class="input search" id="t-q" type="search" placeholder="Sök ärende, beställare eller nummer" value="${esc(TF.q)}" aria-label="Sök">
       <div class="pager" id="pager"></div>
     </div>
     <div class="tlist" id="tlist"><p class="muted">Hämtar …</p></div>
@@ -344,7 +351,7 @@ async function pageTickets(query) {
     <div class="field"><label for="f-cat">Kategori</label><select class="input" id="f-cat"><option value="">Alla</option><option value="none"${TF.category === "none" ? " selected" : ""}>Utan kategori</option>${catOptions(TF.category)}</select></div>
     <div class="field"><label for="f-view">Status</label><select class="input" id="f-view">${views.map(([v, l]) => `<option value="${v}"${TF.view === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
     <div class="field"><label for="f-prio">Prioritet</label><select class="input" id="f-prio">${prioOptions(TF.priority, "Alla")}</select></div>
-    <div class="field"><label for="f-cust">Kund</label><select class="input" id="f-cust"><option value="">Alla</option>${customers.map(c => `<option value="${c.id}"${String(TF.customer) === String(c.id) ? " selected" : ""}>${esc(c.name)}${c.company ? " – " + esc(c.company) : ""}</option>`).join("")}</select></div>
+    <div class="field"><label for="f-cust">Beställare</label><select class="input" id="f-cust"><option value="">Alla</option>${customers.map(c => `<option value="${c.id}"${String(TF.customer) === String(c.id) ? " selected" : ""}>${esc(c.name)}${c.company ? " – " + esc(c.company) : ""}</option>`).join("")}</select></div>
     <div class="field"><label for="f-ass">Handläggare</label><select class="input" id="f-ass"><option value="">Alla</option><option value="none"${TF.assignee === "none" ? " selected" : ""}>Ej tilldelad</option>${S.users.map(u => `<option value="${u.id}"${String(TF.assignee) === String(u.id) ? " selected" : ""}>${esc(u.name)}</option>`).join("")}</select></div>
     <div class="field"><span class="label">Skapad mellan</span><div class="pair">
       <input class="input" type="date" id="f-cf" value="${TF.created_from}" aria-label="Skapad från">
@@ -374,7 +381,16 @@ async function pageTickets(query) {
       selected.clear(); armedBulk = null; loadTickets();
     } catch (e) { toast(e.message, true); }
   };
-  $("#b-close").addEventListener("click", e => bulk("close", e.target, "markerades som klara"));
+  $("#b-status").addEventListener("change", async e => {
+    const st = e.target.value; if (!st) return;
+    try {
+      const r = await api("POST", "/api/tickets/bulk", { ids: [...selected], action: "status", status: st });
+      const skipped = selected.size - r.changed;
+      toast(`${r.changed} ${r.changed === 1 ? "ärende" : "ärenden"} fick status ${st}.` + (skipped ? ` ${skipped} ändrades inte (hade redan statusen eller är låsta).` : ""));
+      selected.clear(); loadTickets();
+    } catch (ex) { toast(ex.message, true); }
+    e.target.value = "";
+  });
   $("#b-archive").addEventListener("click", e => bulk("archive", e.target, "arkiverades"));
   $("#b-delete").addEventListener("click", e => bulk("delete", e.target, "togs bort"));
   $("#b-archive-all").addEventListener("click", async e => {
@@ -398,7 +414,7 @@ function ticketQuery(extra = {}) {
 
 function updateBulk() {
   const n = selected.size;
-  ["#b-close", "#b-archive", "#b-delete"].forEach(s => { const b = $(s); if (b) b.disabled = !n; });
+  ["#b-status", "#b-archive", "#b-delete"].forEach(s => { const b = $(s); if (b) b.disabled = !n; });
   const del = $("#b-delete");
   if (del && armedBulk !== "delete") { del.classList.remove("armed"); del.textContent = n ? `Ta bort (${n})` : "Ta bort"; }
   const all = $$(".rowsel"); const sa = $("#sel-all");
@@ -416,7 +432,7 @@ async function loadTickets() {
   } catch (e) { list.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
   const ab = $("#b-archive-all");
   ab.classList.remove("armed", "btn-dark");
-  ab.textContent = `Arkivera alla klara och avslag (${closedCount})`;
+  ab.textContent = `Arkivera alla avslutade (${closedCount})`;
   ab.disabled = !closedCount;
 
   const pages = Math.max(1, Math.ceil(r.total / r.page_size));
@@ -438,13 +454,13 @@ async function loadTickets() {
       <input type="checkbox" class="rowsel" value="${t.id}" aria-label="Markera ärende ${t.id}"${selected.has(t.id) ? " checked" : ""}>
       <span class="av">${avatar("md")}</span>
       <div class="tmain" style="min-width:0">
-        <div class="who">${esc(t.customer_name || "Ingen kund")}${t.customer_company ? ` <span class="muted">· ${esc(t.customer_company)}</span>` : ""}</div>
+        <div class="who">${esc(t.customer_name || "Ingen beställare")}${t.customer_company ? ` <span class="muted">· ${esc(t.customer_company)}</span>` : ""}</div>
         <a class="ttl" href="#/tickets/${t.id}">${esc(t.title)}</a>
         <div class="sub"><span class="id">#${t.id}</span><span>${esc(t.category || "Ingen kategori")}</span><span class="ag">${t.assignee_name ? esc(t.assignee_name) : "Ej tilldelad"}</span>${t.archived_at ? "<span>Arkiverad</span>" : ""}</div>
       </div>
       <span class="date">${fmtDate(t.created_at)}</span>
       <select class="inline-sel" data-id="${t.id}" data-f="priority" aria-label="Prioritet för ärende ${t.id}">${S.priorities.map(p => `<option${p === t.priority ? " selected" : ""}>${p}</option>`).join("")}</select>
-      <select class="inline-sel st s-${t.status}" data-id="${t.id}" data-f="status" aria-label="Status för ärende ${t.id}">${S.statuses.map(s => `<option${s === t.status ? " selected" : ""}>${s}</option>`).join("")}</select>
+      <select class="inline-sel st sc-${statusInfo(t.status).color}" data-id="${t.id}" data-f="status" aria-label="Status för ärende ${t.id}"${statusInfo(t.status).locked && S.user.role !== "admin" ? ' disabled title="Låst status – kan inte öppnas igen"' : ""}>${S.statuses.map(s => `<option${s === t.status ? " selected" : ""}>${esc(s)}</option>`).join("")}</select>
     </div>`).join("");
   $$(".rowsel", list).forEach(c => c.addEventListener("change", () => { c.checked ? selected.add(+c.value) : selected.delete(+c.value); armedBulk = null; updateBulk(); }));
   $$(".inline-sel", list).forEach(s => s.addEventListener("change", async () => {
@@ -473,12 +489,22 @@ async function pageTicket(id, query) {
         <div class="field"><label for="t-prio">Prioritet</label><select class="input" id="t-prio">${prioOptions(t.priority)}</select></div>
         <div class="field"><label for="t-cat">Kategori</label><select class="input" id="t-cat"><option value="">Ingen kategori</option>${catOptions(t.category_id)}</select></div>
         <div class="field"><label for="t-ass">Handläggare</label><select class="input" id="t-ass">${userOptions(t.assignee_id, "Ej tilldelad", t.assignee_id)}</select></div>
-        ${id ? `<div class="field"><label for="t-status">Status</label><select class="input" id="t-status">${S.statuses.map(s => `<option${s === t.status ? " selected" : ""}>${s}</option>`).join("")}</select></div>`
+        ${id ? `<div class="field"><label for="t-status">Status</label><select class="input" id="t-status"${t.status_locked && S.user.role !== "admin" ? " disabled" : ""}>${S.statuses.map(s => `<option${s === t.status ? " selected" : ""}>${esc(s)}</option>`).join("")}</select>
+            ${t.status_locked ? `<span class="muted" style="font-size:.85rem">${S.user.role === "admin" ? "Låst status. Bara administratörer kan öppna ärendet igen." : "Låst status. Ärendet kan inte öppnas igen."}</span>` : ""}</div>`
              : `<div class="field"><span class="label">Datum</span><div class="input" style="display:flex;align-items:center">${fmtDate(Date.now() / 1000)}</div></div>`}
       </div>
       <div id="booking" class="booking" hidden></div>
       <div class="field"><label for="t-details">Detaljer</label><textarea class="input" id="t-details" placeholder="Beskriv ärendet: vad har hänt, ordernummer, artikel …">${esc(t.details)}</textarea></div>
       ${id ? `<div class="meta"><span>Skapat ${fmtDT(t.created_at)}${t.created_by_name ? " av " + esc(t.created_by_name) : ""}</span><span>Senast ändrat ${fmtDT(t.updated_at)}</span>${t.closed_at ? `<span>Avslutat ${fmtDT(t.closed_at)}</span>` : ""}${t.archived_at ? `<span>Arkiverat ${fmtDT(t.archived_at)}</span>` : ""}</div>` : ""}
+      ${id ? `<section class="comments" aria-labelledby="c-h">
+        <h3 id="c-h">Kommentarer</h3>
+        <div id="c-list"></div>
+        <div class="c-new">
+          <label for="c-body" class="label">Ny kommentar</label>
+          <textarea class="input" id="c-body" rows="3" placeholder="Skriv en kommentar …"></textarea>
+          <div><button type="button" class="btn btn-dark" id="c-add">Lägg till kommentar</button></div>
+        </div>
+      </section>` : ""}
       <div class="foot">
         <div class="right"><a class="textbtn" href="#/tickets">Avbryt</a>${id ? `<button type="button" class="btn btn-danger" id="t-del">Ta bort ärende</button>` : ""}</div>
         <div class="right"><span class="muted" id="t-missing"></span><button type="submit" class="btn btn-dark" id="t-save">${ICON.save}Spara</button></div>
@@ -489,7 +515,7 @@ async function pageTicket(id, query) {
   const renderAside = () => {
     const a = $("#cust-aside");
     if (addingCustomer) {
-      a.innerHTML = `<h2>Ny kund</h2>${customerForm({}, "nc")}`;
+      a.innerHTML = `<h2>Ny beställare</h2>${customerForm({}, "nc")}`;
       bindCustomerForm(a, "nc", null, async c => { customers.push(c); custId = c.id; addingCustomer = false; renderAside(); validate(); toast(`${c.name} lades till.`); },
         () => { addingCustomer = false; renderAside(); });
       return;
@@ -497,12 +523,12 @@ async function pageTicket(id, query) {
     const sel = customers.find(c => c.id === custId);
     const q = custQ.trim().toLowerCase();
     const matches = customers.filter(c => !q || [c.name, c.company, c.email, c.phone].join(" ").toLowerCase().includes(q)).slice(0, 50);
-    a.innerHTML = `<h2>Koppla kund</h2>
-      ${sel ? `<div class="sel-cust">${avatar("sm")}<div style="min-width:0"><div class="n">${esc(sel.name)}</div><div class="c">${esc([sel.company, sel.phone, sel.email].filter(Boolean).join(" · "))}</div></div></div>` : `<p class="muted" style="margin:0 0 14px">Ingen kund vald ännu.</p>`}
-      <input class="searchpill" id="c-q" type="search" placeholder="Sök kund" value="${esc(custQ)}" aria-label="Sök kund">
+    a.innerHTML = `<h2>Koppla beställare</h2>
+      ${sel ? `<div class="sel-cust">${avatar("sm")}<div style="min-width:0"><div class="n">${esc(sel.name)}</div><div class="c">${esc([sel.company, sel.phone, sel.email].filter(Boolean).join(" · "))}</div></div></div>` : `<p class="muted" style="margin:0 0 14px">Ingen beställare vald ännu.</p>`}
+      <input class="searchpill" id="c-q" type="search" placeholder="Sök beställare" value="${esc(custQ)}" aria-label="Sök beställare">
       <div class="or-add">eller <button type="button" id="c-add">Lägg till ny</button></div>
       <div class="clist">${matches.length ? matches.map(c => `<button type="button" class="citem" data-id="${c.id}" aria-pressed="${c.id === custId}">${avatar("sm")}<span style="min-width:0"><span class="n">${esc(c.name)}</span><br><span class="c">${esc(c.company || c.email || "")}</span></span></button>`).join("")
-        : `<p class="muted">${customers.length ? "Ingen kund matchar sökningen." : "Inga kunder ännu. Lägg till den första."}</p>`}</div>`;
+        : `<p class="muted">${customers.length ? "Ingen beställare matchar sökningen." : "Inga beställare ännu. Lägg till den första."}</p>`}</div>`;
     const qi = $("#c-q");
     qi.addEventListener("input", () => { custQ = qi.value; const pos = qi.selectionStart; renderAside(); const n = $("#c-q"); n.focus(); n.setSelectionRange(pos, pos); });
     $("#c-add").addEventListener("click", () => { addingCustomer = true; renderAside(); });
@@ -512,7 +538,7 @@ async function pageTicket(id, query) {
   const validate = () => {
     const miss = [];
     if (!$("#t-title").value.trim()) miss.push("titel");
-    if (!custId) miss.push("kund");
+    if (!custId) miss.push("beställare");
     $("#t-save").disabled = miss.length > 0;
     $("#t-missing").textContent = miss.length ? "Ange " + miss.join(" och ") + " för att spara." : "";
   };
@@ -535,6 +561,27 @@ async function pageTicket(id, query) {
   renderAside(); validate();
   if (!id) $("#t-title").focus();
 
+  const renderComments = list => {
+    const box = $("#c-list"); if (!box) return;
+    box.innerHTML = list.length ? list.map(c => `<article class="comment">
+        <div class="c-meta"><b>${esc(c.author || "Okänd")}</b><span>${fmtDT(c.created_at)}</span>
+          ${c.user_id === S.user.id || S.user.role === "admin" ? `<button type="button" class="textbtn danger c-del" data-id="${c.id}">Ta bort</button>` : ""}</div>
+        <div class="c-body">${esc(c.body)}</div></article>`).join("") : `<p class="muted" style="margin:0">Inga kommentarer ännu.</p>`;
+    $$(".c-del", box).forEach(b => b.addEventListener("click", async () => {
+      if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = "Bekräfta"; return; }
+      try { renderComments((await api("DELETE", "/api/comments/" + b.dataset.id)).comments); } catch (ex) { toast(ex.message, true); }
+    }));
+  };
+  if (id) {
+    renderComments(t.comments || []);
+    $("#c-add").addEventListener("click", async () => {
+      const body = $("#c-body").value.trim();
+      if (!body) { $("#c-body").focus(); return; }
+      try { renderComments((await api("POST", `/api/tickets/${id}/comments`, { body })).comments); $("#c-body").value = ""; toast("Kommentaren sparades."); }
+      catch (ex) { toast(ex.message, true); }
+    });
+  }
+
   if (id) $("#t-del").addEventListener("click", async e => {
     const b = e.currentTarget;
     if (!armedDel) { armedDel = true; b.classList.add("armed"); b.textContent = "Bekräfta: ta bort"; return; }
@@ -547,7 +594,7 @@ async function pageTicket(id, query) {
     validate(); if ($("#t-save").disabled) return;
     const data = { title: $("#t-title").value, details: $("#t-details").value, priority: $("#t-prio").value,
       category_id: $("#t-cat").value || null, assignee_id: $("#t-ass").value || null, customer_id: custId };
-    if (id) data.status = $("#t-status").value;
+    if (id && !$("#t-status").disabled) data.status = $("#t-status").value;
     $("#t-save").disabled = true;
     try {
       if (id) { const r = await api("PUT", "/api/tickets/" + id, data); toast("Ärendet sparades." + notifyText(r)); pageTicket(id, {}); }
@@ -561,7 +608,7 @@ function notifyText(r) {
   return r.notify.sent ? ` Mail skickas till ${r.notify.to}.` : ` Inget mail skickades: ${r.notify.reason}`;
 }
 
-/* ---------------- kundformulär (används på flera ställen) ---------------- */
+/* ---------------- beställarformulär (används på flera ställen) ---------------- */
 function customerForm(c, p) {
   const f = (k, label, type = "text", ac = "") => `<input class="input" id="${p}-${k}" type="${type}" value="${esc(c[k] || "")}" placeholder="${label}" aria-label="${label}"${ac ? ` autocomplete="${ac}"` : ""}>`;
   return `<form class="pform" id="${p}-form" novalidate>
@@ -589,7 +636,7 @@ function bindCustomerForm(scope, p, existingId, onSaved, onCancel) {
 /* =========================================================== KUNDER */
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ".split("");
 async function pageCustomers(selId) {
-  const el = shell("customers", "Kunder", "dark-aside");
+  const el = shell("customers", "Beställare", "dark-aside");
   let customers = [], q = "", sel = selId, editing = false, creating = false;
   const csel = new Set(); let armedDel = false;
   el.innerHTML = `<section class="work">
@@ -597,8 +644,8 @@ async function pageCustomers(selId) {
         <label class="check"><input type="checkbox" id="cs-all"> Markera alla</label>
         <button class="textbtn danger" id="cs-del" type="button" disabled>Ta bort</button>
         <span class="grow"></span>
-        <input class="input search" id="cs-q" type="search" placeholder="Sök namn, företag, telefon" aria-label="Sök kund">
-        <button class="btn btn-mint" id="cs-new" type="button">${ICON.plusSm}Ny kund</button>
+        <input class="input search" id="cs-q" type="search" placeholder="Sök namn, företag, telefon" aria-label="Sök beställare">
+        <button class="btn btn-mint" id="cs-new" type="button">${ICON.plusSm}Ny beställare</button>
       </div>
       <div class="cwrap"><nav class="letters" id="letters" aria-label="Hoppa till bokstav"></nav><div class="tscroll" id="ctable"></div></div>
     </section>
@@ -614,7 +661,7 @@ async function pageCustomers(selId) {
     list.forEach(c => (groups[letterOf(c)] = groups[letterOf(c)] || []).push(c));
     $("#letters").innerHTML = ALPHABET.map(l => `<button type="button" class="${groups[l] ? "has" : ""}" ${groups[l] ? `data-l="${l}"` : "disabled"}>${l}</button>`).join("");
     $$("#letters button[data-l]").forEach(b => b.addEventListener("click", () => { const g = $("#grp-" + b.dataset.l); if (g) g.scrollIntoView({ behavior: "smooth", block: "start" }); }));
-    if (!list.length) { $("#ctable").innerHTML = `<div class="empty">${customers.length ? "Ingen kund matchar sökningen." : "Inga kunder ännu. Klicka <b>Ny kund</b> för att lägga till den första."}</div>`; updateSel(); return; }
+    if (!list.length) { $("#ctable").innerHTML = `<div class="empty">${customers.length ? "Ingen beställare matchar sökningen." : "Inga beställare ännu. Klicka <b>Ny beställare</b> för att lägga till den första."}</div>`; updateSel(); return; }
     const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b, "sv"));
     $("#ctable").innerHTML = `<table class="ctable"><thead><tr><th class="w-check"></th><th class="w-av"></th><th>Namn</th><th>Företag</th><th>Telefon</th><th>Öppna ärenden</th></tr></thead><tbody>
       ${keys.map(k => `<tr class="grp" id="grp-${esc(k)}"><td colspan="6"><span class="grp-badge">${esc(k)}</span></td></tr>` +
@@ -641,19 +688,19 @@ async function pageCustomers(selId) {
   const renderDetail = async () => {
     const a = $("#cdetail");
     if (creating) {
-      a.innerHTML = `<div class="hd"><h2>Ny kund</h2></div><div style="height:20px"></div>${customerForm({}, "cc")}`;
+      a.innerHTML = `<div class="hd"><h2>Ny beställare</h2></div><div style="height:20px"></div>${customerForm({}, "cc")}`;
       bindCustomerForm(a, "cc", null, async c => { creating = false; sel = c.id; await reload(); toast(`${c.name} lades till.`); }, () => { creating = false; renderDetail(); });
       return;
     }
-    if (!sel) { a.innerHTML = `<div class="hd"><h2>Kunddetaljer</h2></div><p class="placeholder" style="margin-top:24px">Välj en kund i listan för att se kontaktuppgifter och ärenden.</p>`; return; }
+    if (!sel) { a.innerHTML = `<div class="hd"><h2>Beställardetaljer</h2></div><p class="placeholder" style="margin-top:24px">Välj en beställare i listan för att se kontaktuppgifter och ärenden.</p>`; return; }
     let c;
     try { c = await api("GET", "/api/customers/" + sel); } catch (e) { a.innerHTML = `<p class="placeholder">${esc(e.message)}</p>`; return; }
     if (editing) {
-      a.innerHTML = `<div class="hd"><h2>Redigera kund</h2></div><div style="height:20px"></div>${customerForm(c, "ce")}`;
-      bindCustomerForm(a, "ce", c.id, async () => { editing = false; await reload(); toast("Kunden sparades."); }, () => { editing = false; renderDetail(); });
+      a.innerHTML = `<div class="hd"><h2>Redigera beställare</h2></div><div style="height:20px"></div>${customerForm(c, "ce")}`;
+      bindCustomerForm(a, "ce", c.id, async () => { editing = false; await reload(); toast("Beställaren sparades."); }, () => { editing = false; renderDetail(); });
       return;
     }
-    a.innerHTML = `<div class="hd"><h2>Kunddetaljer</h2></div>
+    a.innerHTML = `<div class="hd"><h2>Beställardetaljer</h2></div>
       <div class="links"><button type="button" id="cd-edit">Redigera</button><button type="button" id="cd-close">Stäng</button></div>
       ${avatar("lg")}
       <div class="nm">${esc(c.name)}</div>
@@ -678,8 +725,8 @@ async function pageCustomers(selId) {
     if (!armedDel) { armedDel = true; b.classList.add("armed"); b.textContent = `Bekräfta: ta bort ${csel.size}`; return; }
     try {
       const r = await api("POST", "/api/customers/delete", { ids: [...csel] });
-      let msg = `${r.deleted} ${r.deleted === 1 ? "kund togs" : "kunder togs"} bort.`;
-      if (r.blocked) msg += ` ${r.blocked} ${r.blocked === 1 ? "kund har" : "kunder har"} ärenden och togs inte bort.`;
+      let msg = `${r.deleted} ${r.deleted === 1 ? "beställare togs" : "beställare togs"} bort.`;
+      if (r.blocked) msg += ` ${r.blocked} ${r.blocked === 1 ? "beställare har" : "beställare har"} ärenden och togs inte bort.`;
       toast(msg, r.blocked > 0 && !r.deleted);
       if (csel.has(sel)) sel = null;
       csel.clear(); armedDel = false; reload();
@@ -714,8 +761,8 @@ async function pageSettings() {
         </form></div>
     </div>
     <div style="display:flex;flex-direction:column;gap:28px">
-      ${admin ? `<div class="box" id="box-mail"></div><div class="box" id="box-cats"></div>` : ""}
-      <div class="box"><h2>Export</h2><p class="lead">Ladda ner alla ärenden, arkivet och kundregistret som en Excel-fil.</p>
+      ${admin ? `<div class="box" id="box-status"></div><div class="box" id="box-mail"></div><div class="box" id="box-cats"></div>` : ""}
+      <div class="box"><h2>Export</h2><p class="lead">Ladda ner alla ärenden, arkivet, beställarregistret och kommentarerna som en Excel-fil.</p>
         <a class="btn" href="/api/export.xlsx?tz=${TZ()}">${ICON.excel}Exportera till Excel</a></div>
       ${admin ? `<div class="box"><h2>Säkerhetskopia</h2><p class="lead">Ladda ner en kopia av hela databasen. Spara den på ett säkert ställe.</p>
         <a class="btn" href="/api/backup.db">${ICON.save}Ladda ner säkerhetskopia</a></div>` : ""}
@@ -884,8 +931,52 @@ async function pageSettings() {
       catch (ex) { toast(ex.message, true); }
     });
   };
+  const COLORS = [["blue", "Blå"], ["amber", "Gul"], ["green", "Grön"], ["red", "Röd"], ["violet", "Lila"], ["grey", "Grå"]];
+  let armedStatus = null;
+  const renderStatuses = async () => {
+    const box = $("#box-status");
+    let items;
+    try { items = (await api("GET", "/api/statuses")).items; } catch (e) { box.innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+    setStatuses(items);
+    box.innerHTML = `<h2>Statusar</h2>
+      <p class="lead">Ordningen styr listorna, och nya ärenden får den första statusen som inte är avslutad. <b>Avslutad</b> ger ärendet ett avslutsdatum och gör att det kan arkiveras. <b>Låst</b> betyder att ärendet inte kan öppnas igen. Bara administratörer kan då ändra statusen.</p>
+      <ul class="slist">${items.map((x, i) => `<li data-id="${x.id}">
+        <div class="s-order"><button type="button" class="textbtn s-up" ${i === 0 ? "disabled" : ""} aria-label="Flytta upp ${esc(x.name)}">▲</button><button type="button" class="textbtn s-down" ${i === items.length - 1 ? "disabled" : ""} aria-label="Flytta ned ${esc(x.name)}">▼</button></div>
+        <input class="input s-name" value="${esc(x.name)}" aria-label="Namn på status" maxlength="40">
+        <select class="input s-color" aria-label="Färg">${COLORS.map(([k, l]) => `<option value="${k}"${x.color === k ? " selected" : ""}>${l}</option>`).join("")}</select>
+        <label class="check"><input type="checkbox" class="s-closed"${x.closed ? " checked" : ""}> Avslutad</label>
+        <label class="check"><input type="checkbox" class="s-locked"${x.locked ? " checked" : ""}${x.closed ? "" : " disabled"}> Låst</label>
+        <span class="muted s-used">${x.used} ${x.used === 1 ? "ärende" : "ärenden"}</span>
+        <button type="button" class="btn btn-sm s-save">Spara</button>
+        <button type="button" class="btn btn-sm btn-danger s-del${armedStatus === x.id ? " armed" : ""}" ${x.used ? 'disabled title="Används av ärenden"' : ""}>${armedStatus === x.id ? "Bekräfta" : "Ta bort"}</button>
+      </li>`).join("")}</ul>
+      <form class="add-row" id="s-add" novalidate><input class="input" id="s-new" placeholder="Ny status" aria-label="Ny status" maxlength="40"><button class="btn" type="submit">Lägg till</button></form>`;
+    const ids = items.map(x => x.id);
+    $$(".slist li", box).forEach((li, i) => {
+      const sid = +li.dataset.id;
+      $(".s-closed", li).addEventListener("change", e => { const l = $(".s-locked", li); l.disabled = !e.target.checked; if (!e.target.checked) l.checked = false; });
+      $(".s-save", li).addEventListener("click", async () => {
+        try {
+          await api("PUT", "/api/statuses/" + sid, { name: $(".s-name", li).value, color: $(".s-color", li).value, closed: $(".s-closed", li).checked, locked: $(".s-locked", li).checked });
+          toast("Statusen sparades."); renderStatuses();
+        } catch (ex) { toast(ex.message, true); }
+      });
+      $(".s-del", li).addEventListener("click", async () => {
+        if (armedStatus !== sid) { armedStatus = sid; renderStatuses(); return; }
+        try { await api("DELETE", "/api/statuses/" + sid); armedStatus = null; toast("Statusen togs bort."); renderStatuses(); } catch (ex) { toast(ex.message, true); }
+      });
+      const move = async d => { const o = ids.slice(); [o[i], o[i + d]] = [o[i + d], o[i]]; try { await api("POST", "/api/statuses/order", { ids: o }); renderStatuses(); } catch (ex) { toast(ex.message, true); } };
+      $(".s-up", li).addEventListener("click", () => move(-1));
+      $(".s-down", li).addEventListener("click", () => move(1));
+    });
+    $("#s-add").addEventListener("submit", async e => {
+      e.preventDefault();
+      try { await api("POST", "/api/statuses", { name: $("#s-new").value, color: "blue" }); toast("Statusen lades till."); renderStatuses(); } catch (ex) { toast(ex.message, true); }
+    });
+  };
+
   renderBookingCatHook = renderBookingCat;
-  renderUsers(); renderMail(); renderCats();
+  renderUsers(); renderStatuses(); renderMail(); renderCats();
 }
 
 boot();

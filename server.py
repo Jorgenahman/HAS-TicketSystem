@@ -41,9 +41,11 @@ PBKDF2_ROUNDS = 200_000
 PAGE_SIZE = 25
 
 PRIORITIES = ["Låg", "Medium", "Hög"]
-STATUSES = ["Ny", "Pågår", "Klar", "Avslag"]
-CLOSED = ("Klar", "Avslag")          # avslutade ärenden (Avslag = ej godkänt)
-CLOSED_SQL = "('Klar','Avslag')"
+# Statusar ligger i tabellen statuses och redigeras under Inställningar.
+DEFAULT_STATUSES = [  # namn, avslutad, låst, färg
+    ("Ny", 0, 0, "blue"), ("Pågår", 0, 0, "amber"), ("Klar", 1, 0, "green"), ("Avslag", 1, 1, "red")]
+STATUS_COLORS = ("blue", "amber", "green", "red", "grey", "violet")
+CLOSED_SUB = "(SELECT name FROM statuses WHERE closed=1)"   # för SQL: status IN CLOSED_SUB
 BOOKING_CATEGORY = "IT-support boka tid"
 
 SCHEMA = """
@@ -94,6 +96,22 @@ CREATE TABLE IF NOT EXISTS tickets (
 CREATE INDEX IF NOT EXISTS idx_tickets_created ON tickets(created_at);
 CREATE INDEX IF NOT EXISTS idx_tickets_customer ON tickets(customer_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status, archived_at);
+CREATE TABLE IF NOT EXISTS statuses (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  sort INTEGER NOT NULL DEFAULT 0,
+  closed INTEGER NOT NULL DEFAULT 0,
+  locked INTEGER NOT NULL DEFAULT 0,
+  color TEXT NOT NULL DEFAULT 'blue'
+);
+CREATE TABLE IF NOT EXISTS comments (
+  id INTEGER PRIMARY KEY,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  user_id INTEGER REFERENCES users(id),
+  body TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_comments_ticket ON comments(ticket_id);
 CREATE TABLE IF NOT EXISTS settings (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL DEFAULT ''
@@ -123,6 +141,13 @@ def init_db():
     if "booking_url" not in cols:
         con.execute("ALTER TABLE users ADD COLUMN booking_url TEXT NOT NULL DEFAULT ''")
     con.execute("UPDATE tickets SET status='Klar' WHERE status='Avslutad'")
+    if con.execute("SELECT COUNT(*) FROM statuses").fetchone()[0] == 0:
+        for i, (n, c, l, col) in enumerate(DEFAULT_STATUSES):
+            con.execute("INSERT INTO statuses(name,sort,closed,locked,color) VALUES (?,?,?,?,?)", (n, i + 1, c, l, col))
+    # statusar som används i ärenden men saknas i tabellen läggs till som öppna
+    for (n,) in con.execute("SELECT DISTINCT status FROM tickets WHERE status NOT IN (SELECT name FROM statuses)").fetchall():
+        mx = con.execute("SELECT COALESCE(MAX(sort),0) FROM statuses").fetchone()[0]
+        con.execute("INSERT INTO statuses(name,sort,closed,locked,color) VALUES (?,?,0,0,'grey')", (n, mx + 1))
     if get_setting(con, "booking_category_id") == "":
         row = con.execute("SELECT id FROM categories WHERE name=?", (BOOKING_CATEGORY,)).fetchone()
         cid = row[0] if row else con.execute("INSERT INTO categories(name) VALUES (?)", (BOOKING_CATEGORY,)).lastrowid
@@ -133,6 +158,19 @@ def init_db():
 
 def now():
     return int(time.time())
+
+
+def status_rows(con):
+    return [dict(r) for r in con.execute("SELECT * FROM statuses ORDER BY sort, id").fetchall()]
+
+
+def status_by_name(con, name):
+    return con.execute("SELECT * FROM statuses WHERE name=?", (name,)).fetchone()
+
+
+def first_open_status(con):
+    r = con.execute("SELECT name FROM statuses WHERE closed=0 ORDER BY sort, id LIMIT 1").fetchone()
+    return r[0] if r else "Ny"
 
 
 def get_setting(con, key, default=""):
@@ -466,7 +504,7 @@ def api_status(ctx):
     n = ctx["con"].execute("SELECT COUNT(*) FROM users").fetchone()[0]
     bc = int_or_none(get_setting(ctx["con"], "booking_category_id"))
     return {"setup_needed": n == 0, "user": user_public(ctx["user"]) if ctx["user"] else None,
-            "priorities": PRIORITIES, "statuses": STATUSES, "closed_statuses": list(CLOSED), "booking_category_id": bc}
+            "priorities": PRIORITIES, "status_list": status_rows(ctx["con"]), "booking_category_id": bc}
 
 
 @route("POST", r"/api/setup", auth=False)
@@ -620,6 +658,10 @@ def api_category_delete(ctx, cid):
 
 
 # ================================================================ API: kunder
+def require_staff(ctx):
+    need(ctx["user"]["role"] in ("admin", "agent"), "Bara administratörer och handläggare kan ändra beställare.", 403)
+
+
 def customer_fields(b):
     f = {k: s(b.get(k), 200) for k in ("first_name", "last_name", "company", "title", "phone", "email")}
     need(f["first_name"], "Ange förnamn.")
@@ -631,7 +673,7 @@ def customer_fields(b):
 def api_customers(ctx):
     q = s(ctx["query"].get("q"), 100)
     sql = """SELECT cu.*, COUNT(t.id) AS ticket_count,
-                    SUM(CASE WHEN t.status NOT IN ('Klar','Avslag') AND t.archived_at IS NULL THEN 1 ELSE 0 END) AS open_count
+                    SUM(CASE WHEN t.status NOT IN (SELECT name FROM statuses WHERE closed=1) AND t.archived_at IS NULL THEN 1 ELSE 0 END) AS open_count
              FROM customers cu LEFT JOIN tickets t ON t.customer_id=cu.id"""
     args = []
     if q:
@@ -645,7 +687,7 @@ def api_customers(ctx):
 def api_customer(ctx, cid):
     con = ctx["con"]
     row = con.execute("SELECT * FROM customers WHERE id=?", (int(cid),)).fetchone()
-    need(row, "Kunden finns inte.", 404)
+    need(row, "Beställaren finns inte.", 404)
     tickets = con.execute(TICKET_SELECT + " WHERE t.customer_id=? ORDER BY t.created_at DESC LIMIT 20", (int(cid),)).fetchall()
     d = customer_public(row)
     d["tickets"] = [dict(t) for t in tickets]
@@ -654,6 +696,7 @@ def api_customer(ctx, cid):
 
 @route("POST", r"/api/customers")
 def api_customer_create(ctx):
+    require_staff(ctx)
     f = customer_fields(ctx["body"])
     t = now()
     cur = ctx["con"].execute("""INSERT INTO customers(first_name,last_name,company,title,phone,email,created_at,updated_at)
@@ -663,8 +706,9 @@ def api_customer_create(ctx):
 
 @route("PUT", r"/api/customers/(\d+)")
 def api_customer_update(ctx, cid):
+    require_staff(ctx)
     f = customer_fields(ctx["body"])
-    need(ctx["con"].execute("SELECT 1 FROM customers WHERE id=?", (int(cid),)).fetchone(), "Kunden finns inte.", 404)
+    need(ctx["con"].execute("SELECT 1 FROM customers WHERE id=?", (int(cid),)).fetchone(), "Beställaren finns inte.", 404)
     ctx["con"].execute("""UPDATE customers SET first_name=:first_name,last_name=:last_name,company=:company,title=:title,
                           phone=:phone,email=:email,updated_at=:t WHERE id=:id""", dict(f, t=now(), id=int(cid)))
     return customer_public(ctx["con"].execute("SELECT * FROM customers WHERE id=?", (int(cid),)).fetchone())
@@ -672,9 +716,10 @@ def api_customer_update(ctx, cid):
 
 @route("POST", r"/api/customers/delete")
 def api_customers_delete(ctx):
+    require_staff(ctx)
     con = ctx["con"]
     ids = [int(i) for i in ctx["body"].get("ids", []) if int_or_none(i)]
-    need(ids, "Inga kunder valda.")
+    need(ids, "Inga beställare valda.")
     blocked = con.execute("SELECT DISTINCT customer_id FROM tickets WHERE customer_id IN (%s)" % ",".join("?" * len(ids)), ids).fetchall()
     blocked = {r[0] for r in blocked}
     deletable = [i for i in ids if i not in blocked]
@@ -691,12 +736,12 @@ def ticket_filters(q):
         where.append("t.archived_at IS NOT NULL")
     elif archived != "all":
         where.append("t.archived_at IS NULL")
-    if q.get("status") in STATUSES:
-        where.append("t.status=?"); args.append(q["status"])
-    elif q.get("status") == "open":
-        where.append("t.status NOT IN " + CLOSED_SQL)
+    if q.get("status") == "open":
+        where.append("t.status NOT IN " + CLOSED_SUB)
     elif q.get("status") == "closed":
-        where.append("t.status IN " + CLOSED_SQL)
+        where.append("t.status IN " + CLOSED_SUB)
+    elif q.get("status"):
+        where.append("t.status=?"); args.append(q["status"])
     if q.get("priority") in PRIORITIES:
         where.append("t.priority=?"); args.append(q["priority"])
     for key, col in (("category", "t.category_id"), ("customer", "t.customer_id"), ("assignee", "t.assignee_id")):
@@ -722,7 +767,7 @@ SORTS = {
     "date_desc": "t.created_at DESC",
     "date_asc": "t.created_at ASC",
     "priority": "CASE t.priority WHEN 'Hög' THEN 0 WHEN 'Medium' THEN 1 ELSE 2 END, t.created_at DESC",
-    "status": "CASE t.status WHEN 'Ny' THEN 0 WHEN 'Pågår' THEN 1 ELSE 2 END, t.created_at DESC",
+    "status": "(SELECT sort FROM statuses st WHERE st.name=t.status), t.created_at DESC",
     "updated": "t.updated_at DESC",
 }
 
@@ -753,9 +798,115 @@ def validate_refs(con, b):
             need(con.execute("SELECT 1 FROM {} WHERE id=?".format(table), (v,)).fetchone(), "Ogiltigt val: " + key)
 
 
+def ticket_comments(con, tid):
+    return [dict(r) for r in con.execute("""SELECT c.id, c.body, c.created_at, c.user_id, u.name AS author FROM comments c
+                                            LEFT JOIN users u ON u.id=c.user_id WHERE c.ticket_id=? ORDER BY c.created_at, c.id""", (tid,)).fetchall()]
+
+
 @route("GET", r"/api/tickets/(\d+)")
 def api_ticket(ctx, tid):
-    return get_ticket(ctx["con"], int(tid))
+    t = get_ticket(ctx["con"], int(tid))
+    t["comments"] = ticket_comments(ctx["con"], int(tid))
+    st = status_by_name(ctx["con"], t["status"])
+    t["status_locked"] = bool(st and st["locked"])
+    return t
+
+
+@route("POST", r"/api/tickets/(\d+)/comments")
+def api_comment_create(ctx, tid):
+    tid = int(tid)
+    get_ticket(ctx["con"], tid)
+    body = s(ctx["body"].get("body"), 10000)
+    need(body, "Skriv en kommentar först.")
+    ctx["con"].execute("INSERT INTO comments(ticket_id,user_id,body,created_at) VALUES (?,?,?,?)", (tid, ctx["user"]["id"], body, now()))
+    ctx["con"].execute("UPDATE tickets SET updated_at=? WHERE id=?", (now(), tid))
+    return {"comments": ticket_comments(ctx["con"], tid)}
+
+
+@route("DELETE", r"/api/comments/(\d+)")
+def api_comment_delete(ctx, cid):
+    c = ctx["con"].execute("SELECT * FROM comments WHERE id=?", (int(cid),)).fetchone()
+    need(c, "Kommentaren finns inte.", 404)
+    need(c["user_id"] == ctx["user"]["id"] or ctx["user"]["role"] == "admin", "Du kan bara ta bort dina egna kommentarer.", 403)
+    ctx["con"].execute("DELETE FROM comments WHERE id=?", (int(cid),))
+    return {"comments": ticket_comments(ctx["con"], c["ticket_id"])}
+
+
+# ================================================================ API: statusar
+def status_payload(b, cur=None):
+    name = s(b.get("name", cur["name"] if cur else ""), 40)
+    need(name, "Ange ett namn på statusen.")
+    closed = 1 if b.get("closed", cur["closed"] if cur else 0) else 0
+    locked = 1 if b.get("locked", cur["locked"] if cur else 0) else 0
+    need(not locked or closed, "Bara en avslutad status kan vara låst.")
+    color = b.get("color", cur["color"] if cur else "blue")
+    color = color if color in STATUS_COLORS else "grey"
+    return name, closed, locked, color
+
+
+def check_open_left(con, except_id=None, becomes_closed=False):
+    n = con.execute("SELECT COUNT(*) FROM statuses WHERE closed=0 AND id<>?", (except_id or 0,)).fetchone()[0]
+    need(n > 0 or not becomes_closed, "Det måste finnas minst en status som inte är avslutad.")
+
+
+@route("GET", r"/api/statuses")
+def api_statuses(ctx):
+    rows = status_rows(ctx["con"])
+    for r in rows:
+        r["used"] = ctx["con"].execute("SELECT COUNT(*) FROM tickets WHERE status=?", (r["name"],)).fetchone()[0]
+    return {"items": rows}
+
+
+@route("POST", r"/api/statuses", admin=True)
+def api_status_create(ctx):
+    con = ctx["con"]
+    name, closed, locked, color = status_payload(ctx["body"])
+    need(not status_by_name(con, name), "Statusen finns redan.", 409)
+    mx = con.execute("SELECT COALESCE(MAX(sort),0) FROM statuses").fetchone()[0]
+    con.execute("INSERT INTO statuses(name,sort,closed,locked,color) VALUES (?,?,?,?,?)", (name, mx + 1, closed, locked, color))
+    return api_statuses(ctx)
+
+
+@route("PUT", r"/api/statuses/(\d+)", admin=True)
+def api_status_update(ctx, sid):
+    con, sid = ctx["con"], int(sid)
+    cur = con.execute("SELECT * FROM statuses WHERE id=?", (sid,)).fetchone()
+    need(cur, "Statusen finns inte.", 404)
+    name, closed, locked, color = status_payload(ctx["body"], cur)
+    need(not con.execute("SELECT 1 FROM statuses WHERE name=? AND id<>?", (name, sid)).fetchone(), "Det finns redan en status med det namnet.", 409)
+    if closed and not cur["closed"]:
+        check_open_left(con, sid, True)
+    con.execute("UPDATE statuses SET name=?, closed=?, locked=?, color=? WHERE id=?", (name, closed, locked, color, sid))
+    if name != cur["name"]:
+        con.execute("UPDATE tickets SET status=? WHERE status=?", (name, cur["name"]))
+    t = now()
+    if closed and not cur["closed"]:
+        con.execute("UPDATE tickets SET closed_at=? WHERE status=? AND closed_at IS NULL", (t, name))
+    elif not closed and cur["closed"]:
+        con.execute("UPDATE tickets SET closed_at=NULL, archived_at=NULL WHERE status=?", (name,))
+    return api_statuses(ctx)
+
+
+@route("DELETE", r"/api/statuses/(\d+)", admin=True)
+def api_status_delete(ctx, sid):
+    con, sid = ctx["con"], int(sid)
+    cur = con.execute("SELECT * FROM statuses WHERE id=?", (sid,)).fetchone()
+    need(cur, "Statusen finns inte.", 404)
+    n = con.execute("SELECT COUNT(*) FROM tickets WHERE status=?", (cur["name"],)).fetchone()[0]
+    need(n == 0, "Statusen används av {} ärenden och kan inte tas bort. Byt status på dem först.".format(n), 409)
+    if not cur["closed"]:
+        check_open_left(con, sid, True)
+    con.execute("DELETE FROM statuses WHERE id=?", (sid,))
+    return api_statuses(ctx)
+
+
+@route("POST", r"/api/statuses/order", admin=True)
+def api_status_order(ctx):
+    ids = [int_or_none(i) for i in ctx["body"].get("ids", [])]
+    for i, sid in enumerate(ids):
+        if sid:
+            ctx["con"].execute("UPDATE statuses SET sort=? WHERE id=?", (i + 1, sid))
+    return api_statuses(ctx)
 
 
 @route("POST", r"/api/tickets")
@@ -764,12 +915,12 @@ def api_ticket_create(ctx):
     title = s(b.get("title"), 200)
     need(title, "Ange en titel.")
     prio = b.get("priority") if b.get("priority") in PRIORITIES else "Medium"
-    need(int_or_none(b.get("customer_id")), "Koppla ärendet till en kund.")
+    need(int_or_none(b.get("customer_id")), "Koppla ärendet till en beställare.")
     validate_refs(con, b)
     t = now()
     cur = con.execute("""INSERT INTO tickets(title,details,priority,status,category_id,customer_id,assignee_id,created_by,created_at,updated_at)
                          VALUES (?,?,?,?,?,?,?,?,?,?)""",
-                      (title, s(b.get("details"), 20000), prio, "Ny", int_or_none(b.get("category_id")),
+                      (title, s(b.get("details"), 20000), prio, first_open_status(con), int_or_none(b.get("category_id")),
                        int_or_none(b.get("customer_id")), int_or_none(b.get("assignee_id")), ctx["user"]["id"], t, t))
     out = get_ticket(con, cur.lastrowid)
     if out["assignee_id"]:
@@ -792,18 +943,23 @@ def api_ticket_update(ctx, tid):
         need(b["priority"] in PRIORITIES, "Ogiltig prioritet.")
         fields["priority"] = b["priority"]
     if "status" in b:
-        need(b["status"] in STATUSES, "Ogiltig status.")
+        new_st = status_by_name(con, b["status"])
+        need(new_st, "Ogiltig status.")
+        old_st = status_by_name(con, old["status"])
+        if b["status"] != old["status"] and old_st and old_st["locked"]:
+            need(ctx["user"]["role"] == "admin",
+                 "Ärendet har status {} och kan inte öppnas igen. Bara en administratör kan ändra status.".format(old["status"]), 403)
         fields["status"] = b["status"]
-        if b["status"] in CLOSED and old["status"] not in CLOSED:
+        if new_st["closed"] and not (old_st and old_st["closed"]):
             fields["closed_at"] = now()
-        elif b["status"] not in CLOSED:
+        elif not new_st["closed"]:
             fields["closed_at"] = None
             fields["archived_at"] = None
     for key in ("category_id", "customer_id", "assignee_id"):
         if key in b:
             fields[key] = int_or_none(b[key])
     if "customer_id" in fields:
-        need(fields["customer_id"], "Koppla ärendet till en kund.")
+        need(fields["customer_id"], "Koppla ärendet till en beställare.")
     validate_refs(con, b)
     if fields:
         fields["updated_at"] = now()
@@ -829,10 +985,18 @@ def api_tickets_bulk(ctx):
     ph = ",".join("?" * len(ids))
     t = now()
     action = b.get("action")
-    if action == "close":
-        cur = con.execute("UPDATE tickets SET status='Klar', closed_at=?, updated_at=? WHERE status NOT IN " + CLOSED_SQL + " AND id IN (%s)" % ph, [t, t] + ids)
+    if action == "status":
+        st = status_by_name(con, b.get("status"))
+        need(st, "Ogiltig status.")
+        locked_guard = "" if ctx["user"]["role"] == "admin" else " AND status NOT IN (SELECT name FROM statuses WHERE locked=1)"
+        if st["closed"]:
+            cur = con.execute("UPDATE tickets SET status=?, closed_at=COALESCE(CASE WHEN status IN " + CLOSED_SUB + " THEN closed_at END, ?), updated_at=? "
+                              "WHERE status<>? AND id IN (%s)" % ph + locked_guard, [st["name"], t, t, st["name"]] + ids)
+        else:
+            cur = con.execute("UPDATE tickets SET status=?, closed_at=NULL, archived_at=NULL, updated_at=? WHERE status<>? AND id IN (%s)" % ph + locked_guard,
+                              [st["name"], t, st["name"]] + ids)
     elif action == "archive":
-        cur = con.execute("UPDATE tickets SET archived_at=?, updated_at=? WHERE status IN " + CLOSED_SQL + " AND archived_at IS NULL AND id IN (%s)" % ph, [t, t] + ids)
+        cur = con.execute("UPDATE tickets SET archived_at=?, updated_at=? WHERE status IN " + CLOSED_SUB + " AND archived_at IS NULL AND id IN (%s)" % ph, [t, t] + ids)
     elif action == "delete":
         cur = con.execute("DELETE FROM tickets WHERE id IN (%s)" % ph, ids)
     else:
@@ -843,7 +1007,7 @@ def api_tickets_bulk(ctx):
 @route("POST", r"/api/tickets/archive-closed")
 def api_archive_closed(ctx):
     t = now()
-    cur = ctx["con"].execute("UPDATE tickets SET archived_at=?, updated_at=? WHERE status IN " + CLOSED_SQL + " AND archived_at IS NULL", (t, t))
+    cur = ctx["con"].execute("UPDATE tickets SET archived_at=?, updated_at=? WHERE status IN " + CLOSED_SUB + " AND archived_at IS NULL", (t, t))
     return {"archived": cur.rowcount}
 
 
@@ -867,7 +1031,7 @@ def api_dashboard(ctx):
     def one(sql, a=()):
         return con.execute(sql, list(a)).fetchone()[0] or 0
 
-    open_ = "status NOT IN " + CLOSED_SQL + " AND archived_at IS NULL"
+    open_ = "status NOT IN " + CLOSED_SUB + " AND archived_at IS NULL"
     cards = {}
     for key, cond in (("unassigned", open_ + " AND assignee_id IS NULL"), ("open", open_),
                       ("high", open_ + " AND priority='Hög'")):
@@ -880,8 +1044,10 @@ def api_dashboard(ctx):
         }
 
     created = one("SELECT COUNT(*) FROM tickets WHERE created_at BETWEEN ? AND ?" + f, [t_from, t_to] + args)
-    created_closed = one("SELECT COUNT(*) FROM tickets WHERE created_at BETWEEN ? AND ? AND status='Klar'" + f, [t_from, t_to] + args)
-    created_rejected = one("SELECT COUNT(*) FROM tickets WHERE created_at BETWEEN ? AND ? AND status='Avslag'" + f, [t_from, t_to] + args)
+    closed_breakdown = [{"name": r[0], "n": r[1]} for r in con.execute(
+        "SELECT s.name, COUNT(t.id) FROM statuses s LEFT JOIN tickets t ON t.status=s.name AND t.created_at BETWEEN ? AND ?" + f.replace(" AND ", " AND t.") +
+        " WHERE s.closed=1 GROUP BY s.id ORDER BY s.sort", [t_from, t_to] + args).fetchall()]
+    created_closed = sum(x["n"] for x in closed_breakdown)
 
     cust = con.execute("""SELECT t.customer_id, (SELECT MIN(created_at) FROM tickets t2 WHERE t2.customer_id=t.customer_id) AS first
                           FROM tickets t WHERE t.customer_id IS NOT NULL AND t.created_at BETWEEN ? AND ?""" + f.replace(" AND ", " AND t.") +
@@ -906,7 +1072,7 @@ def api_dashboard(ctx):
     if days and days[-1]["date"] != last:
         days.append({"date": last, "created": cr.get(last, 0), "closed": cl.get(last, 0)})
 
-    return {"cards": cards, "created": created, "created_closed": created_closed, "created_rejected": created_rejected,
+    return {"cards": cards, "created": created, "created_closed": created_closed, "closed_breakdown": closed_breakdown,
             "customers_total": len(cust), "customers_new": new_c, "series": days}
 
 
@@ -919,8 +1085,8 @@ def api_export(ctx):
     def serial(ts):
         return round((ts - tz * 60) / 86400 + 25569, 6) if ts else ""
 
-    headers = ["ID", "Titel", "Beskrivning", "Prioritet", "Status", "Kategori", "Kund", "Företag", "Kund e-post",
-               "Kund telefon", "Handläggare", "Skapad av", "Skapad", "Senast ändrad", "Avslutad", "Arkiverad"]
+    headers = ["ID", "Titel", "Beskrivning", "Prioritet", "Status", "Kategori", "Beställare", "Företag", "Beställare e-post",
+               "Beställare telefon", "Handläggare", "Skapad av", "Skapad", "Senast ändrad", "Avslutad", "Arkiverad"]
     widths = [6, 36, 60, 10, 10, 16, 22, 20, 28, 16, 20, 20, 17, 17, 17, 17]
 
     def rows(cond):
@@ -935,10 +1101,14 @@ def api_export(ctx):
     cust = [[c["id"], c["first_name"], c["last_name"], c["company"], c["title"], c["phone"], c["email"], serial(c["created_at"])]
             for c in con.execute("SELECT * FROM customers ORDER BY last_name, first_name").fetchall()]
     dates = {12, 13, 14, 15}
+    comments = [[c["ticket_id"], c["title"], serial(c["created_at"]), c["author"] or "", c["body"]]
+                for c in con.execute("""SELECT c.*, t.title, u.name AS author FROM comments c JOIN tickets t ON t.id=c.ticket_id
+                                        LEFT JOIN users u ON u.id=c.user_id ORDER BY c.ticket_id, c.created_at""").fetchall()]
     data = build_xlsx([
         ("Ärenden", headers, rows("t.archived_at IS NULL"), dates, widths),
         ("Arkiv", headers, rows("t.archived_at IS NOT NULL"), dates, widths),
-        ("Kunder", ["ID", "Förnamn", "Efternamn", "Företag", "Titel", "Telefon", "E-post", "Skapad"], cust, {7}, [6, 16, 18, 22, 18, 16, 28, 17]),
+        ("Beställare", ["ID", "Förnamn", "Efternamn", "Företag", "Titel", "Telefon", "E-post", "Skapad"], cust, {7}, [6, 16, 18, 22, 18, 16, 28, 17]),
+        ("Kommentarer", ["Ärende-ID", "Ärende", "Skriven", "Av", "Kommentar"], comments, {2}, [10, 36, 17, 22, 80]),
     ])
     fname = "arenden-{}.xlsx".format(time.strftime("%Y-%m-%d"))
     ctx["handler"].send_bytes(200, data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1052,7 +1222,7 @@ def notify_assignment(con, t, by_user):
         "Prioritet:  {}".format(t["priority"]),
         "Status:     {}".format(t["status"]),
         "Kategori:   {}".format(t["category"] or "–"),
-        "Kund:       {}{}".format(t["customer_name"] or "–", " (" + t["customer_company"] + ")" if t["customer_company"] else ""),
+        "Beställare: {}{}".format(t["customer_name"] or "–", " (" + t["customer_company"] + ")" if t["customer_company"] else ""),
     ]
     if t["customer_phone"] or t["customer_email"]:
         lines.append("Kontakt:    {}".format(" · ".join(x for x in (t["customer_phone"], t["customer_email"]) if x)))

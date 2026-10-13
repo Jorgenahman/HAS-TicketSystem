@@ -1,6 +1,6 @@
 # Ärendehantering
 
-Ett internt ärendehanteringssystem med dashboard, ärenden, kundregister, inloggning, mail vid tilldelning och tidsbokning via Microsoft Bookings. Byggt för att köras på en Synology NAS.
+Ett internt ärendehanteringssystem med dashboard, ärenden, beställarregister, kommentarer, redigerbara statusar, inloggning, mail vid tilldelning och tidsbokning via Microsoft Bookings. Byggt för att köras på en Synology NAS.
 
 - **Server:** Python 3.8+ med endast standardbiblioteket. Inga paket behöver installeras.
 - **Databas:** SQLite, i en enda fil (`data/arenden.db`).
@@ -36,7 +36,7 @@ Kommandot skapar `demo/dist/arendehantering-demo.html`. Filen kan öppnas direkt
 
 ## Viktigt om GitHub
 
-- Mappen `data/` och alla `.db`-filer är undantagna i `.gitignore`. Databasen innehåller kunduppgifter, inloggningar och lösenordet till mailkontot, så den får aldrig laddas upp.
+- Mappen `data/` och alla `.db`-filer är undantagna i `.gitignore`. Databasen innehåller uppgifter om beställare, inloggningar och lösenordet till mailkontot, så den får aldrig laddas upp.
 - Inga lösenord eller nycklar finns i koden. Mailinställningarna sparas i databasen och görs i gränssnittet.
 - Gör repot **privat** om det innehåller interna uppgifter.
 
@@ -91,7 +91,7 @@ Servern startar automatiskt igen när NAS:en startar om.
 
 Den första som öppnar sidan får skapa ett **administratörskonto**. Gör det direkt efter installationen. Därefter lägger administratören till övriga användare under **Inställningar → Användare**.
 
-- **Handläggare** kan skapa och hantera ärenden och kunder.
+- **Handläggare** kan skapa och hantera ärenden och beställare.
 - **Administratörer** kan dessutom lägga till och stänga av användare samt ändra kategorier.
 
 Kategorierna Leverans, Order, Retur, Reklamation, Övrigt och IT-support boka tid läggs in från början. Ni kan byta namn på dem, ta bort dem eller lägga till nya under Inställningar.
@@ -135,7 +135,28 @@ För Microsoft 365 måste kontot ha SMTP-inloggning (SMTP AUTH) påslagen. Micro
 
 ## Status
 
-Ett ärende har någon av statusarna **Ny**, **Pågår**, **Klar** eller **Avslag**. Avslag betyder att ärendet inte godkändes. Både Klar och Avslag räknas som avslutade: ärendet får ett avslutsdatum och kan arkiveras. En databas från en tidigare version uppgraderas automatiskt när servern startar, och ärenden med status "Avslutad" får då status Klar.
+Statusarna redigeras under **Inställningar → Statusar**. Bara administratörer ser den rutan. Från början finns:
+
+| Status | Avslutad | Låst |
+|---|---|---|
+| Ny | – | – |
+| Pågår | – | – |
+| Klar | ja | – |
+| Avslag | ja | ja |
+
+- **Ordning:** styr listor och sortering. Nya ärenden får den första statusen som inte är avslutad.
+- **Avslutad:** ärendet får ett avslutsdatum, räknas inte som öppet och kan arkiveras.
+- **Låst:** ärendet kan inte öppnas igen. Handläggare kan inte byta status på det, men en administratör kan. Bara en avslutad status kan vara låst.
+- **Byta namn:** alla ärenden med statusen följer med till det nya namnet.
+- **Ta bort:** går bara om inget ärende har statusen. Det måste alltid finnas minst en status som inte är avslutad.
+
+## Kommentarer
+
+Under **Kommentarer** i ett befintligt ärende kan handläggare och administratörer skriva kommentarer. Varje kommentar visar vem som skrev den och när. Du kan ta bort dina egna kommentarer, och en administratör kan ta bort alla. Kommentarerna följer med i Excel-exporten på bladet *Kommentarer*.
+
+## Beställare
+
+Beställarregistret (tidigare "Kunder") innehåller den som har beställt ärendet. Bara administratörer och handläggare kan lägga till, ändra och ta bort beställare. Beställare loggar inte in i systemet.
 
 ## Säkerhetskopiering
 

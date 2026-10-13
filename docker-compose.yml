@@ -1,0 +1,9 @@
+services:
+  arendehantering:
+    build: .
+    container_name: arendehantering
+    ports:
+      - "8000:8000"          # vänster siffra = porten ni öppnar i webbläsaren
+    volumes:
+      - ./data:/data         # databasen sparas i mappen data bredvid den här filen
+    restart: unless-stopped

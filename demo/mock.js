@@ -2,7 +2,7 @@
 /* DEMOLÄGE: ersätter servern med en låtsasserver i webbläsaren.
    Samma API som server.py, men data ligger bara i den här webbläsaren. */
 (function () {
-  const KEY = "ts.demo.db.v3", SKEY = "ts.demo.session";
+  const KEY = "ts.demo.db.v4", SKEY = "ts.demo.session";
   const PRIORITIES = ["Låg", "Medium", "Hög"];
   const DEFAULT_ST = [["Ny", 0, 0, "blue"], ["Pågår", 0, 0, "amber"], ["Klar", 1, 0, "green"], ["Avslag", 1, 1, "red"]];
   const COLORS = ["blue", "amber", "green", "red", "grey", "violet"];
@@ -62,7 +62,7 @@
   const need = (c, msg, st = 400) => { if (!c) throw new E(st, msg); };
   const s = (v, n = 2000) => String(v ?? "").trim().slice(0, n);
   const int = v => (v === null || v === undefined || v === "" || v === "null" || isNaN(Number(v))) ? null : Number(v);
-  const pub = u => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, booking_url: u.booking_url || "" });
+  const pub = u => ({ id: u.id, name: u.name, email: u.email, role: u.role, active: u.active, booking_url: u.booking_url || "", lang: u.lang || "sv" });
   const burl = v => { v = s(v, 500); need(!v || /^https:\/\/\S+$/i.test(v), "Bokningssidan måste vara en adress som börjar med https://"); return v; };
   const notify = t => { const a = db.users.find(u => u.id === t.assignee_id); if (!a) return null;
     return db.settings.smtp.smtp_enabled === "1" ? { sent: true, to: a.email } : { sent: false, to: a.email, reason: "Mail är inte inställt (Inställningar → E-post). I demon skickas aldrig mail." }; };
@@ -110,7 +110,7 @@
 
   on("GET", "/api/status", () => ({ setup_needed: false, user: me() ? pub(me()) : null, priorities: PRIORITIES, status_list: stList(),
     booking_category_id: db.settings.booking_category_id || null }), { auth: false });
-  on("PUT", "/api/me", (b) => { const u = me(); u.booking_url = burl(b.booking_url); return pub(u); });
+  on("PUT", "/api/me", (b) => { const u = me(); if ("booking_url" in b) u.booking_url = burl(b.booking_url); if ("lang" in b) u.lang = b.lang === "en" ? "en" : "sv"; return pub(u); });
   const settingsOut = () => ({ smtp: Object.assign({}, db.settings.smtp, { has_password: !!db.settings.smtp.pw, pw: undefined }), last_mail: null, booking_category_id: db.settings.booking_category_id || null });
   on("GET", "/api/settings", () => settingsOut(), { admin: true });
   on("PUT", "/api/settings", (b) => {
@@ -142,7 +142,7 @@
     const name = s(b.name, 100), email = s(b.email, 200), pw = String(b.password || "");
     need(name, "Ange namn."); need(EMAIL_RE.test(email), "Ange en giltig e-postadress."); need(pw.length >= 8, "Lösenordet måste vara minst 8 tecken.");
     need(!db.users.some(u => u.email.toLowerCase() === email.toLowerCase()), "E-postadressen används redan.", 409);
-    const u = { id: ++db.seq.user, name, email, pw, role: b.role === "admin" ? "admin" : "agent", active: true, booking_url: burl(b.booking_url) }; db.users.push(u); return pub(u);
+    const u = { id: ++db.seq.user, name, email, pw, role: b.role === "admin" ? "admin" : "agent", active: true, booking_url: burl(b.booking_url), lang: b.lang === "en" ? "en" : "sv" }; db.users.push(u); return pub(u);
   }, { admin: true });
   on("PUT", "/api/users/(\\d+)", (b, id) => {
     const u = db.users.find(x => x.id === +id); need(u, "Användaren finns inte.", 404);
@@ -153,7 +153,7 @@
     if (u.role === "admin" && (role !== "admin" || !active)) need(adminsLeft(u.id) > 0, "Det måste finnas minst en aktiv administratör.");
     const pw = String(b.password || ""); if (pw) { need(pw.length >= 8, "Lösenordet måste vara minst 8 tecken."); u.pw = pw; }
     const bu = b.booking_url === undefined ? u.booking_url : burl(b.booking_url);
-    Object.assign(u, { name, email, role, active, booking_url: bu }); return pub(u);
+    Object.assign(u, { name, email, role, active, booking_url: bu, lang: b.lang === undefined ? (u.lang || "sv") : (b.lang === "en" ? "en" : "sv") }); return pub(u);
   }, { admin: true });
 
   on("GET", "/api/categories", () => ({ items: db.categories.slice().sort((a, b) => a.name.localeCompare(b.name, "sv"))
@@ -334,7 +334,8 @@
     if (!a) return;
     e.preventDefault();
     const t = document.getElementById("toast");
-    t.textContent = a.href.includes("backup") ? "Säkerhetskopia finns i den installerade versionen." : "Excel-exporten fungerar i den installerade versionen, inte i demon.";
+    const tt = window.t || (x => x);
+    t.textContent = a.href.includes("backup") ? tt("Säkerhetskopia finns i den installerade versionen.") : tt("Excel-exporten fungerar i den installerade versionen, inte i demon.");
     t.className = "toast"; t.hidden = false; setTimeout(() => t.hidden = true, 3500);
   }, true);
 })();

@@ -1,5 +1,9 @@
 # Ändringslogg
 
+## 1.4
+- Gränssnittet finns på svenska och engelska. Språket väljs på inloggningssidan, i sidomenyn eller under Mitt konto.
+- Mail skickas på mottagarens språk, och Excel-exporten följer det valda språket.
+
 ## 1.3
 - "Kund" heter nu "Beställare" i hela systemet och i Excel-exporten.
 - Bara administratörer och handläggare kan lägga till, ändra och ta bort beställare.

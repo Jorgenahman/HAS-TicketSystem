@@ -7,6 +7,7 @@ HERE=os.path.dirname(os.path.abspath(__file__))
 base=os.path.join(HERE,'..','static')+os.sep
 css=open(base+'app.css',encoding='utf-8').read()
 js=open(base+'app.js',encoding='utf-8').read()
+i18n=open(base+'i18n.js',encoding='utf-8').read()
 mock=open(os.path.join(HERE,'mock.js'),encoding='utf-8').read()
 extra_css='''
 .demo-pill{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:40;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -24,7 +25,10 @@ html=f'''<title>Ärendehantering</title>
 </style>
 <div id="root"></div>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<div class="demo-pill" id="demo-pill"><span><b>Demo</b> · inloggning: admin@demo.se / demo1234</span><button type="button" id="demo-reset">Återställ demodata</button></div>
+<div class="demo-pill" id="demo-pill"><span><b>Demo</b> · <span id="demo-login"></span>: admin@demo.se / demo1234</span><button type="button" id="demo-reset"></button></div>
+<script>
+{i18n}
+</script>
 <script>
 {mock}
 </script>
@@ -33,7 +37,9 @@ html=f'''<title>Ärendehantering</title>
 </script>
 <script>
 (function(){{const b=document.getElementById("demo-reset");let armed=false;
-b.addEventListener("click",()=>{{if(!armed){{armed=true;b.classList.add("armed");b.textContent="Bekräfta: radera ändringar";setTimeout(()=>{{armed=false;b.classList.remove("armed");b.textContent="Återställ demodata"}},4000);return}}window.__demoReset()}})}})();
+const paint=()=>{{document.getElementById("demo-login").textContent=t("inloggning");b.textContent=armed?t("Bekräfta: radera ändringar"):t("Återställ demodata");}};
+paint();new MutationObserver(paint).observe(document.documentElement,{{attributes:true,attributeFilter:["lang"]}});
+b.addEventListener("click",()=>{{if(!armed){{armed=true;b.classList.add("armed");paint();setTimeout(()=>{{armed=false;b.classList.remove("armed");paint()}},4000);return}}window.__demoReset()}})}})();
 </script>
 '''
 assert '</script' not in js.replace('</script>','') 

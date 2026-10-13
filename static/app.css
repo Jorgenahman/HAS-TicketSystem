@@ -334,3 +334,14 @@ textarea.input.mono{min-height:110px}
 .slist .s-name{flex:1;min-width:120px;min-height:38px;padding:6px 10px}
 .slist .s-color{width:auto;min-height:38px;padding:6px 8px}
 .slist .s-used{font-size:.85rem;min-width:70px}
+
+/* språkväljare */
+.lang{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:3px;gap:2px;background:var(--surface)}
+.lang button{border:0;background:transparent;border-radius:999px;padding:5px 12px;cursor:pointer;font-size:.88rem;color:var(--ink-2)}
+.lang button[aria-pressed="true"]{background:var(--band-2);color:#fff}
+.auth-lang{align-self:flex-end;margin-bottom:-6px}
+.side-lang{background:transparent;border-color:rgb(255 255 255 / .15);margin-bottom:14px}
+.side-lang button{color:#9f9ac0;font-size:.8rem;padding:4px 10px}
+.side-lang button[aria-pressed="true"]{background:rgb(255 255 255 / .12);color:#fff}
+.box-lang{align-self:flex-start;margin-top:4px}
+@media (max-width:760px){.side .bottom{display:flex;gap:10px;align-items:center}.side-lang{margin-bottom:0}}

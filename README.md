@@ -150,6 +150,14 @@ Statusarna redigeras under **Inställningar → Statusar**. Bara administratöre
 - **Byta namn:** alla ärenden med statusen följer med till det nya namnet.
 - **Ta bort:** går bara om inget ärende har statusen. Det måste alltid finnas minst en status som inte är avslutad.
 
+## Språk (svenska / engelska)
+
+- Du väljer språk på inloggningssidan, längst ner i sidomenyn eller under **Inställningar → Mitt konto**. Valet sparas på ditt konto och i webbläsaren.
+- Mailen vid tilldelning skickas på mottagarens språk. En administratör kan ändra språket för en användare under **Användare → Ändra**.
+- Excel-exporten får rubriker på det språk du har valt.
+- Data som ni själva skriver in översätts inte, till exempel titlar, kommentarer och namn. Standardstatusarna (Ny, Pågår, Klar, Avslag), prioriteterna och standardkategorierna visas på engelska tills en administratör byter namn på dem.
+- Alla texter i gränssnittet finns i `static/i18n.js`. Där kan du ändra en översättning eller lägga till en ny.
+
 ## Kommentarer
 
 Under **Kommentarer** i ett befintligt ärende kan handläggare och administratörer skriva kommentarer. Varje kommentar visar vem som skrev den och när. Du kan ta bort dina egna kommentarer, och en administratör kan ta bort alla. Kommentarerna följer med i Excel-exporten på bladet *Kommentarer*.

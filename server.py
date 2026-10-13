@@ -140,6 +140,8 @@ def init_db():
     cols = [r[1] for r in con.execute("PRAGMA table_info(users)").fetchall()]
     if "booking_url" not in cols:
         con.execute("ALTER TABLE users ADD COLUMN booking_url TEXT NOT NULL DEFAULT ''")
+    if "lang" not in cols:
+        con.execute("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'sv'")
     con.execute("UPDATE tickets SET status='Klar' WHERE status='Avslutad'")
     if con.execute("SELECT COUNT(*) FROM statuses").fetchone()[0] == 0:
         for i, (n, c, l, col) in enumerate(DEFAULT_STATUSES):
@@ -227,7 +229,55 @@ EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
 def user_public(row):
     return {"id": row["id"], "name": row["name"], "email": row["email"], "role": row["role"], "active": bool(row["active"]),
-            "booking_url": row["booking_url"] if "booking_url" in row.keys() else ""}
+            "booking_url": row["booking_url"] if "booking_url" in row.keys() else "",
+            "lang": row["lang"] if "lang" in row.keys() else "sv"}
+
+
+def lang_value(v):
+    return "en" if v == "en" else "sv"
+
+
+# Texter i mail och Excel-export (svenska är källtext)
+SERVER_EN = {
+    "Hej {},": "Hi {},",
+    "{} har tilldelat dig ett ärende.": "{} has assigned a ticket to you.",
+    "Ärende:     #{} {}": "Ticket:     #{} {}",
+    "Prioritet:  {}": "Priority:   {}",
+    "Status:     {}": "Status:     {}",
+    "Kategori:   {}": "Category:   {}",
+    "Beställare: {}{}": "Requester:  {}{}",
+    "Kontakt:    {}": "Contact:    {}",
+    "Detaljer:": "Details:",
+    "Öppna ärendet: {}/#/tickets/{}": "Open the ticket: {}/#/tickets/{}",
+    "Ärendet gäller tidsbokning för IT-support.": "This ticket is about booking time with IT support.",
+    "Din bokningssida: {}": "Your booking page: {}",
+    "Du har ingen bokningssida inlagd. Lägg in den under Inställningar → Mitt konto.": "You have no booking page. Add it under Settings → My account.",
+    "Ärende #{} har tilldelats dig: {}": "Ticket #{} has been assigned to you: {}",
+    "Testmail från Ärendehantering": "Test email from the Ticket system",
+    "Det här är ett testmail. Mailinställningarna fungerar.": "This is a test email. The email settings work.",
+    "Ärendehantering": "Ticket system",
+    # Excel
+    "Ärenden": "Tickets", "Arkiv": "Archive", "Beställare": "Requesters", "Kommentarer": "Comments",
+    "Titel": "Title", "Beskrivning": "Description", "Prioritet": "Priority", "Kategori": "Category",
+    "Företag": "Company", "Beställare e-post": "Requester email", "Beställare telefon": "Requester phone",
+    "Handläggare": "Agent", "Skapad av": "Created by", "Skapad": "Created", "Senast ändrad": "Last updated",
+    "Avslutad": "Closed", "Arkiverad": "Archived", "Förnamn": "First name", "Efternamn": "Last name",
+    "Telefon": "Phone", "E-post": "Email", "Ärende-ID": "Ticket ID", "Ärende": "Ticket", "Skriven": "Written",
+    "Av": "By", "Kommentar": "Comment", "Namn": "Name", "Beställare_1": "Requester",
+}
+SERVER_SV = {"Beställare_1": "Beställare"}   # nycklar som stavas likadant på svenska
+# Standardvärden i databasen visas översatta på engelska
+DATA_EN = {"Ny": "New", "Pågår": "In progress", "Klar": "Done", "Avslag": "Rejected", "Låg": "Low", "Medium": "Medium", "Hög": "High",
+           "Leverans": "Delivery", "Order": "Order", "Retur": "Return", "Reklamation": "Complaint", "Övrigt": "Other",
+           "IT-support boka tid": "IT support – book a time"}
+
+
+def T(lang, text):
+    return SERVER_EN.get(text, text) if lang == "en" else SERVER_SV.get(text, text)
+
+
+def TV(lang, value):
+    return DATA_EN.get(value, value) if lang == "en" and value else value
 
 
 URL_RE = re.compile(r"^https://[^\s]+$", re.I)
@@ -515,8 +565,8 @@ def api_setup(ctx):
     need(name, "Ange ditt namn.")
     need(EMAIL_RE.match(email), "Ange en giltig e-postadress.")
     need(len(pw) >= 8, "Lösenordet måste vara minst 8 tecken.")
-    cur = con.execute("INSERT INTO users(name,email,pw_hash,role,active,created_at) VALUES (?,?,?,?,1,?)",
-                      (name, email, hash_password(pw), "admin", now()))
+    cur = con.execute("INSERT INTO users(name,email,pw_hash,role,active,created_at,lang) VALUES (?,?,?,?,1,?,?)",
+                      (name, email, hash_password(pw), "admin", now(), lang_value(b.get("lang"))))
     tok = start_session(ctx, cur.lastrowid)
     con.commit()
     user = con.execute("SELECT * FROM users WHERE id=?", (cur.lastrowid,)).fetchone()
@@ -555,8 +605,10 @@ def api_logout(ctx):
 
 @route("PUT", r"/api/me")
 def api_me_update(ctx):
-    burl = booking_url_value(ctx["body"].get("booking_url"))
-    ctx["con"].execute("UPDATE users SET booking_url=? WHERE id=?", (burl, ctx["user"]["id"]))
+    b, u = ctx["body"], ctx["user"]
+    burl = booking_url_value(b.get("booking_url", u["booking_url"]))
+    lang = lang_value(b.get("lang", u["lang"]))
+    ctx["con"].execute("UPDATE users SET booking_url=?, lang=? WHERE id=?", (burl, lang, u["id"]))
     return user_public(ctx["con"].execute("SELECT * FROM users WHERE id=?", (ctx["user"]["id"],)).fetchone())
 
 
@@ -590,8 +642,8 @@ def api_user_create(ctx):
     need(EMAIL_RE.match(email), "Ange en giltig e-postadress.")
     need(len(pw) >= 8, "Lösenordet måste vara minst 8 tecken.")
     need(not con.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone(), "E-postadressen används redan.", 409)
-    cur = con.execute("INSERT INTO users(name,email,pw_hash,role,active,created_at,booking_url) VALUES (?,?,?,?,1,?,?)",
-                      (name, email, hash_password(pw), role, now(), booking_url_value(b.get("booking_url"))))
+    cur = con.execute("INSERT INTO users(name,email,pw_hash,role,active,created_at,booking_url,lang) VALUES (?,?,?,?,1,?,?,?)",
+                      (name, email, hash_password(pw), role, now(), booking_url_value(b.get("booking_url")), lang_value(b.get("lang"))))
     return user_public(con.execute("SELECT * FROM users WHERE id=?", (cur.lastrowid,)).fetchone())
 
 
@@ -612,7 +664,8 @@ def api_user_update(ctx, uid):
     if u["role"] == "admin" and (role != "admin" or not active):
         need(admins_left(con, uid) > 0, "Det måste finnas minst en aktiv administratör.")
     burl = booking_url_value(b.get("booking_url", u["booking_url"]))
-    con.execute("UPDATE users SET name=?, email=?, role=?, active=?, booking_url=? WHERE id=?", (name, email, role, active, burl, uid))
+    ulang = lang_value(b.get("lang", u["lang"]))
+    con.execute("UPDATE users SET name=?, email=?, role=?, active=?, booking_url=?, lang=? WHERE id=?", (name, email, role, active, burl, ulang, uid))
     pw = str(b.get("password") or "")
     if pw:
         need(len(pw) >= 8, "Lösenordet måste vara minst 8 tecken.")
@@ -1081,18 +1134,20 @@ def api_dashboard(ctx):
 def api_export(ctx):
     con = ctx["con"]
     tz = int_or_none(ctx["query"].get("tz")) or 0
+    L = lang_value(ctx["query"].get("lang") or ctx["user"]["lang"])
+    _ = lambda x: T(L, x)
 
     def serial(ts):
         return round((ts - tz * 60) / 86400 + 25569, 6) if ts else ""
 
-    headers = ["ID", "Titel", "Beskrivning", "Prioritet", "Status", "Kategori", "Beställare", "Företag", "Beställare e-post",
-               "Beställare telefon", "Handläggare", "Skapad av", "Skapad", "Senast ändrad", "Avslutad", "Arkiverad"]
+    headers = [_(h) for h in ["ID", "Titel", "Beskrivning", "Prioritet", "Status", "Kategori", "Beställare_1", "Företag", "Beställare e-post",
+                              "Beställare telefon", "Handläggare", "Skapad av", "Skapad", "Senast ändrad", "Avslutad", "Arkiverad"]]
     widths = [6, 36, 60, 10, 10, 16, 22, 20, 28, 16, 20, 20, 17, 17, 17, 17]
 
     def rows(cond):
         out = []
         for t in con.execute(TICKET_SELECT + " WHERE " + cond + " ORDER BY t.id").fetchall():
-            out.append([t["id"], t["title"], t["details"], t["priority"], t["status"], t["category"] or "",
+            out.append([t["id"], t["title"], t["details"], TV(L, t["priority"]), TV(L, t["status"]), TV(L, t["category"]) or "",
                         t["customer_name"] or "", t["customer_company"] or "", t["customer_email"] or "",
                         t["customer_phone"] or "", t["assignee_name"] or "", t["created_by_name"] or "",
                         serial(t["created_at"]), serial(t["updated_at"]), serial(t["closed_at"]), serial(t["archived_at"])])
@@ -1105,12 +1160,12 @@ def api_export(ctx):
                 for c in con.execute("""SELECT c.*, t.title, u.name AS author FROM comments c JOIN tickets t ON t.id=c.ticket_id
                                         LEFT JOIN users u ON u.id=c.user_id ORDER BY c.ticket_id, c.created_at""").fetchall()]
     data = build_xlsx([
-        ("Ärenden", headers, rows("t.archived_at IS NULL"), dates, widths),
-        ("Arkiv", headers, rows("t.archived_at IS NOT NULL"), dates, widths),
-        ("Beställare", ["ID", "Förnamn", "Efternamn", "Företag", "Titel", "Telefon", "E-post", "Skapad"], cust, {7}, [6, 16, 18, 22, 18, 16, 28, 17]),
-        ("Kommentarer", ["Ärende-ID", "Ärende", "Skriven", "Av", "Kommentar"], comments, {2}, [10, 36, 17, 22, 80]),
+        (_("Ärenden"), headers, rows("t.archived_at IS NULL"), dates, widths),
+        (_("Arkiv"), headers, rows("t.archived_at IS NOT NULL"), dates, widths),
+        (_("Beställare"), [_(h) for h in ["ID", "Förnamn", "Efternamn", "Företag", "Titel", "Telefon", "E-post", "Skapad"]], cust, {7}, [6, 16, 18, 22, 18, 16, 28, 17]),
+        (_("Kommentarer"), [_(h) for h in ["Ärende-ID", "Ärende", "Skriven", "Av", "Kommentar"]], comments, {2}, [10, 36, 17, 22, 80]),
     ])
-    fname = "arenden-{}.xlsx".format(time.strftime("%Y-%m-%d"))
+    fname = ("tickets-{}.xlsx" if L == "en" else "arenden-{}.xlsx").format(time.strftime("%Y-%m-%d"))
     ctx["handler"].send_bytes(200, data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                               {"Content-Disposition": 'attachment; filename="{}"'.format(fname), "Cache-Control": "no-store"})
 
@@ -1159,7 +1214,7 @@ def smtp_config(con):
 def send_mail(cfg, to, subject, body):
     msg = EmailMessage()
     msg["Subject"] = subject
-    msg["From"] = formataddr((cfg.get("smtp_from_name") or "Ärendehantering", cfg["smtp_from"]))
+    msg["From"] = formataddr((cfg.get("smtp_from_name") or T(cfg.get("_lang", "sv"), "Ärendehantering"), cfg["smtp_from"]))
     msg["To"] = to
     msg.set_content(body)
     port = int(cfg.get("smtp_port") or 587)
@@ -1213,30 +1268,32 @@ def notify_assignment(con, t, by_user):
     if cfg["smtp_enabled"] != "1" or not cfg["smtp_host"] or not cfg["smtp_from"]:
         return {"sent": False, "to": a["email"], "reason": "Mail är inte inställt (Inställningar → E-post)."}
     base = (cfg["base_url"] or "").rstrip("/")
+    L = a["lang"] if "lang" in a.keys() else "sv"
+    _ = lambda x: T(L, x)
     lines = [
-        "Hej {},".format(a["name"]),
+        _("Hej {},").format(a["name"]),
         "",
-        "{} har tilldelat dig ett ärende.".format(by_user["name"]),
+        _("{} har tilldelat dig ett ärende.").format(by_user["name"]),
         "",
-        "Ärende:     #{} {}".format(t["id"], t["title"]),
-        "Prioritet:  {}".format(t["priority"]),
-        "Status:     {}".format(t["status"]),
-        "Kategori:   {}".format(t["category"] or "–"),
-        "Beställare: {}{}".format(t["customer_name"] or "–", " (" + t["customer_company"] + ")" if t["customer_company"] else ""),
+        _("Ärende:     #{} {}").format(t["id"], t["title"]),
+        _("Prioritet:  {}").format(TV(L, t["priority"])),
+        _("Status:     {}").format(TV(L, t["status"])),
+        _("Kategori:   {}").format(TV(L, t["category"]) or "–"),
+        _("Beställare: {}{}").format(t["customer_name"] or "–", " (" + t["customer_company"] + ")" if t["customer_company"] else ""),
     ]
     if t["customer_phone"] or t["customer_email"]:
-        lines.append("Kontakt:    {}".format(" · ".join(x for x in (t["customer_phone"], t["customer_email"]) if x)))
+        lines.append(_("Kontakt:    {}").format(" · ".join(x for x in (t["customer_phone"], t["customer_email"]) if x)))
     if t["details"]:
-        lines += ["", "Detaljer:", t["details"]]
+        lines += ["", _("Detaljer:"), t["details"]]
     if base:
-        lines += ["", "Öppna ärendet: {}/#/tickets/{}".format(base, t["id"])]
+        lines += ["", _("Öppna ärendet: {}/#/tickets/{}").format(base, t["id"])]
     bc = int_or_none(get_setting(con, "booking_category_id"))
     if bc and t["category_id"] == bc:
-        lines += ["", "Ärendet gäller tidsbokning för IT-support."]
-        lines.append("Din bokningssida: {}".format(a["booking_url"]) if a["booking_url"] else
-                     "Du har ingen bokningssida inlagd. Lägg in den under Inställningar → Mitt konto.")
-    subject = "Ärende #{} har tilldelats dig: {}".format(t["id"], t["title"])
-    send_mail_async(cfg, a["email"], subject, "\n".join(lines))
+        lines += ["", _("Ärendet gäller tidsbokning för IT-support.")]
+        lines.append(_("Din bokningssida: {}").format(a["booking_url"]) if a["booking_url"] else
+                     _("Du har ingen bokningssida inlagd. Lägg in den under Inställningar → Mitt konto."))
+    subject = _("Ärende #{} har tilldelats dig: {}").format(t["id"], t["title"])
+    send_mail_async(dict(cfg, _lang=L), a["email"], subject, "\n".join(lines))
     return {"sent": True, "to": a["email"]}
 
 
@@ -1301,8 +1358,9 @@ def api_test_mail(ctx):
     need(cfg["smtp_host"] and cfg["smtp_from"], "Fyll i och spara mailinställningarna först.")
     to = ctx["user"]["email"]
     try:
-        send_mail(cfg, to, "Testmail från Ärendehantering",
-                  "Det här är ett testmail. Mailinställningarna fungerar.")
+        L = ctx["user"]["lang"]
+        send_mail(dict(cfg, _lang=L), to, T(L, "Testmail från Ärendehantering"),
+                  T(L, "Det här är ett testmail. Mailinställningarna fungerar."))
     except ApiError:
         raise
     except Exception as e:

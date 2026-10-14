@@ -17,8 +17,9 @@ extra_css='''
 .demo-pill button.armed{color:var(--high)}
 '''
 html=f'''<title>Ärendehantering</title>
+<script>try{{var k=(JSON.parse(localStorage.getItem("ts.theme"))||{{}}).k||"blagra";if(k==="ljus")k="blagra";if(k==="skog")k="carpe";if(k!=="lila")document.documentElement.dataset.theme=k}}catch(e){{document.documentElement.dataset.theme="blagra"}}</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Share+Tech+Mono&display=swap">
 <style>
 {css}
 {extra_css}

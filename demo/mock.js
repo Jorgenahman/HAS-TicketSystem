@@ -74,7 +74,7 @@
     const c = db.customers.find(x => x.id === t.customer_id), a = db.users.find(x => x.id === t.assignee_id),
       cb = db.users.find(x => x.id === t.created_by), cat = db.categories.find(x => x.id === t.category_id);
     return Object.assign({}, t, { category: cat ? cat.name : null, customer_name: c ? cname(c) : null, customer_company: c ? c.company : null,
-      customer_email: c ? c.email : null, customer_phone: c ? c.phone : null, assignee_name: a ? a.name : null, assignee_email: a ? a.email : null, assignee_booking_url: a ? a.booking_url || "" : null,
+      customer_email: c ? c.email : null, customer_phone: c ? c.phone : null, customer_theme: c ? c.theme || "" : null, assignee_name: a ? a.name : null, assignee_email: a ? a.email : null, assignee_booking_url: a ? a.booking_url || "" : null,
       created_by_name: cb ? cb.name : null });
   }
   const getT = id => { const t = db.tickets.find(x => x.id === id); need(t, "Ärendet finns inte längre.", 404); return t; };
@@ -167,7 +167,7 @@
   on("DELETE", "/api/categories/(\\d+)", (b, id) => { if (db.settings.booking_category_id === +id) db.settings.booking_category_id = null; db.tickets.forEach(t => { if (t.category_id === +id) t.category_id = null; });
     db.categories = db.categories.filter(c => c.id !== +id); return { ok: true }; }, { admin: true });
 
-  const custFields = b => { const f = {}; ["first_name", "last_name", "company", "title", "phone", "email"].forEach(k => f[k] = s(b[k], 200));
+  const custFields = b => { const f = {}; ["first_name", "last_name", "company", "title", "phone", "email"].forEach(k => f[k] = s(b[k], 200)); f.theme = ["", "lila", "blagra", "carpe", "cdb"].includes(b.theme || "") ? (b.theme || "") : "";
     need(f.first_name, "Ange förnamn."); need(!f.email || EMAIL_RE.test(f.email), "E-postadressen ser inte giltig ut."); return f; };
   on("GET", "/api/customers", (b, q) => {
     const text = s(q.q, 100);

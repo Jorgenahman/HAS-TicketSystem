@@ -19,7 +19,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /* ---------------- ikoner ---------------- */
 const ICON = {
   user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20c1.2-3.6 4-5.5 7.5-5.5s6.3 1.9 7.5 5.5"/></svg>',
-  plus: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="11" fill="#0e3b2b"/><path d="M12 7v10M7 12h10" stroke="#33e3a2" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="11" style="fill:var(--mint-ink)"/><path d="M12 7v10M7 12h10" style="stroke:var(--mint)" stroke-width="2.4" stroke-linecap="round"/></svg>',
+  palette: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-.9.8-1.7 1.7-1.7H16a5 5 0 0 0 5-5c0-4-4-7.2-9-7.2Z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10.5" cy="7.5" r="1"/><circle cx="15" cy="8" r="1"/></svg>',
   plusSm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>',
   dash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3 2.5 8 12 13l9.5-5L12 3Z"/><path d="m2.5 12 9.5 5 9.5-5"/><path d="m2.5 16 9.5 5 9.5-5"/></svg>',
   tickets: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2.5 3 7v10l9 4.5 9-4.5V7l-9-4.5Z"/><path d="M3 7l9 4.5L21 7M12 11.5v10"/></svg>',
@@ -34,6 +35,25 @@ const ICON = {
   excel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"/><path d="M14 3v5h5M9 12l6 6M15 12l-6 6"/></svg>',
 };
 const avatar = (size = "sm") => `<span class="avatar ${size}" aria-hidden="true">${ICON.user}</span>`;
+/* Initialer i stället för tom avatar: samma namn får alltid samma färg */
+const AV_COLORS = ["#6f5fd6", "#14866d", "#b4570f", "#2f6db5", "#a23b72", "#5b6b2f"];
+function initials(name) {
+  const p = String(name || "?").trim().split(/\s+/).filter(Boolean);
+  if (!p.length) return "?";
+  return ((p[0][0] || "") + (p.length > 1 ? p[p.length - 1][0] : "")).toUpperCase();
+}
+function avColor(name) { let h = 0; for (const ch of String(name || "")) h = (h * 31 + ch.charCodeAt(0)) >>> 0; return AV_COLORS[h % AV_COLORS.length]; }
+const ini = (name, size = "sm") => `<span class="ini ${size}" style="--c:${avColor(name)}" aria-hidden="true">${esc(initials(name))}</span>`;
+ICON.search = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+ICON.filter = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>';
+ICON.x = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+ICON.back = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6"/></svg>';
+ICON.inbox = '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 28 12 10h24l6 18v10H6z"/><path d="M6 28h11l2 5h10l2-5h11"/></svg>';
+ICON.people = '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="18" cy="17" r="7"/><path d="M5 40c1.5-7 6.5-11 13-11s11.5 4 13 11"/><circle cx="34" cy="19" r="5"/><path d="M33 29c5 0 9 3.4 10 9"/></svg>';
+ICON.chat = '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M8 10h32v22H20l-8 7v-7H8z"/></svg>';
+function emptyState(icon, text, action = "") {
+  return `<div class="empty-state"><span class="es-ic">${icon}</span><p>${text}</p>${action}</div>`;
+}
 
 /* ---------------- API ---------------- */
 async function api(method, path, body) {
@@ -73,6 +93,17 @@ function daysAgo(n) { const d = new Date(); d.setDate(d.getDate() - n); return i
 /* ---------------- lagring av filterval (per webbläsare) ---------------- */
 function loadPref(key, def) { try { const v = JSON.parse(localStorage.getItem("ts." + key)); return v ? Object.assign({}, def, v) : Object.assign({}, def); } catch (e) { return Object.assign({}, def); } }
 function savePref(key, v) { try { localStorage.setItem("ts." + key, JSON.stringify(v)); } catch (e) {} }
+const DEFAULT_THEME = "blagra"; // standardtema för alla som inte valt eget
+const THEMES = [
+  ["blagra", "Nordisk blågrå", "Standard · lugn och professionell", "mörkblått med klarblått", ["#1f2a37", "#2b3848", "#2563eb", "#93c5fd", "#f5f7fa"]],
+  ["lila", "Lila", "Det ursprungliga temat", "mörklila med mintgrönt", ["#241d3d", "#372c5f", "#33e3a2", "#6f5fd6", "#f5f5f9"]],
+  ["carpe", "Carpe Diem · Matrix", "Matrix: grön kod på svart", "neongrönt på svart", ["#000000", "#020d06", "#00ff41", "#0b8f2e", "#b6ffc6"]],
+  ["cdb", "Visual Guidelines 2025", "Enligt Carpe Diem Beds riktlinjer", "svart, vitt och grått", ["#ffffff", "#000000", "#b9b7b6", "#e3e2e2", "#f7f7f7"]],];
+function applyTheme(k) { if (k === "skog") k = "carpe"; if (k === "ljus") k = DEFAULT_THEME; if (k && k !== "lila") document.documentElement.dataset.theme = k; else delete document.documentElement.dataset.theme; }
+applyTheme(loadPref("theme", { k: DEFAULT_THEME }).k);
+/* Beställartema: visar sidan i beställarens tema medan dennes kort eller ärende är öppet, annars användarens eget. */
+function viewTheme(k) { applyTheme(k && THEMES.some(x => x[0] === k) ? k : loadPref("theme", { k: DEFAULT_THEME }).k); }
+const themeName = k => { const x = THEMES.find(x => x[0] === k); return x ? t(x[1]) + " – " + t(x[3]) : ""; };
 
 /* ---------------- språk ---------------- */
 const langSwitch = (cls = "") => `<div class="lang ${cls}" role="group" aria-label="${t("Språk")}">
@@ -106,6 +137,34 @@ async function loadRefs() {
   if (st.user) { S.user = st.user; if (st.user.lang && st.user.lang !== LANG) setLang(st.user.lang); }
 }
 
+/* Matrix-regn på inloggningssidan (bara i Carpe Diem · Matrix-temat) */
+function matrixRain(host) {
+  if (!host || document.documentElement.dataset.theme !== "carpe") return;
+  if (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const cv = document.createElement("canvas"); cv.className = "mx-rain"; cv.setAttribute("aria-hidden", "true");
+  host.prepend(cv);
+  const ctx = cv.getContext("2d"), chars = "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789:.=*+-<>¦|Z";
+  const fs = 16; let cols = [], w = 0, h = 0;
+  const size = () => { w = cv.width = window.innerWidth; h = cv.height = window.innerHeight; cols = Array.from({ length: Math.ceil(w / fs) }, () => Math.random() * -h / fs); };
+  size(); window.addEventListener("resize", size);
+  let last = 0;
+  const tick = ts => {
+    if (!cv.isConnected || document.documentElement.dataset.theme !== "carpe") { window.removeEventListener("resize", size); cv.remove(); return; }
+    if (ts - last > 50) {
+      last = ts;
+      ctx.fillStyle = "rgba(0,0,0,0.08)"; ctx.fillRect(0, 0, w, h);
+      ctx.font = fs + "px monospace";
+      cols.forEach((y, i) => {
+        const ch = chars[Math.floor(Math.random() * chars.length)];
+        ctx.fillStyle = Math.random() > .975 ? "#d6ffe0" : "#00ff41";
+        ctx.fillText(ch, i * fs, y * fs);
+        cols[i] = y * fs > h && Math.random() > .975 ? 0 : y + 1;
+      });
+    }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
 function showAuth() {
   document.title = t("Ärendehantering");
   root.innerHTML = `<div class="auth"><form class="auth-card" id="login" novalidate>
@@ -118,6 +177,7 @@ function showAuth() {
     <button class="btn btn-dark" type="submit">${t("Logga in")}</button>
   </form></div>`;
   bindLang(root, showAuth);
+  matrixRain($(".auth"));
   $("#l-email").focus();
   $("#login").addEventListener("submit", async e => {
     e.preventDefault();
@@ -144,6 +204,7 @@ function showSetup() {
     <button class="btn btn-dark" type="submit">${t("Skapa konto")}</button>
   </form></div>`;
   bindLang(root, showSetup);
+  matrixRain($(".auth"));
   $("#s-name").focus();
   $("#setup").addEventListener("submit", async e => {
     e.preventDefault();
@@ -163,12 +224,12 @@ async function logout() {
 
 /* ---------------- skal ---------------- */
 function shell(active, title, layout = "") {
-  const nav = [["dashboard", t("Dashboard"), ICON.dash], ["tickets", t("Ärenden"), ICON.tickets], ["customers", t("Beställare"), ICON.customers], ["settings", t("Inställningar"), ICON.settings]];
+  const nav = [["dashboard", t("Dashboard"), ICON.dash], ["tickets", t("Ärenden"), ICON.tickets], ["settings", t("Inställningar"), ICON.settings]];
   root.innerHTML = `<div class="shell">
     <aside class="side">
-      <div class="me">${avatar("lg")}<div class="name">${esc(S.user.name)}</div><div class="role">${S.user.role === "admin" ? t("Administratör") : t("Handläggare")}</div></div>
-      <a class="btn-new" href="#/tickets/new">${ICON.plus}${t("Ny")}</a>
-      <nav class="nav" aria-label="${t("Huvudmeny")}">${nav.map(([k, l, i]) => `<a href="#/${k}"${k === active ? ' aria-current="page"' : ""}>${i}${l}</a>`).join("")}</nav>
+      <div class="me">${ini(S.user.name, "md")}<div class="me-txt"><div class="name">${esc(S.user.name)}</div><div class="role">${S.user.role === "admin" ? t("Administratör") : t("Handläggare")}</div></div></div>
+      <a class="btn-new" href="#/tickets/new" aria-label="${t("Nytt ärende")}">${ICON.plus}<span>${t("Nytt ärende")}</span></a>
+      <nav class="nav" aria-label="${t("Huvudmeny")}">${nav.map(([k, l, i]) => `<a href="#/${k}"${k === active ? ' aria-current="page"' : ""}>${i}<span>${l}</span></a>`).join("")}</nav>
       <div class="bottom">${langSwitch("side-lang")}<button class="linkbtn" id="logout" type="button">${t("Logga ut")}</button></div>
     </aside>
     <div class="main">
@@ -189,14 +250,16 @@ function parseHash() {
   return { parts: path.split("/").filter(Boolean), query: Object.fromEntries(new URLSearchParams(query || "")) };
 }
 function route() {
+  viewTheme(null);
   if (!S.user) return showAuth();
   const { parts, query } = parseHash();
   const [a, b] = parts;
   if (a === "tickets" && b === "new") return pageTicket(null, query);
   if (a === "tickets" && b) return pageTicket(Number(b), query);
   if (a === "tickets") return pageTickets(query);
-  if (a === "customers") return pageCustomers(b ? Number(b) : null);
-  if (a === "settings") return pageSettings();
+  // Beställare ligger nu som en flik under Inställningar; gamla länkar skickas vidare
+  if (a === "customers") { location.replace("#/settings/requesters" + (b ? "/" + b : "")); return; }
+  if (a === "settings") return pageSettings(b, parts[2] ? Number(parts[2]) : null);
   return pageDashboard();
 }
 window.addEventListener("hashchange", route);
@@ -215,7 +278,7 @@ async function pageDashboard() {
   const el = shell("dashboard", t("Dashboard"));
   if (!DF.from) DF.from = daysAgo(6);
   if (!DF.to) DF.to = isoDay(new Date());
-  el.innerHTML = `<section class="work"><h2 class="sec-title">${t("Översikt")}</h2><div id="dash-body"><p class="muted">${t("Hämtar …")}</p></div></section>
+  el.innerHTML = `<section class="work"><div id="dash-body"><p class="muted">${t("Hämtar …")}</p></div></section>
   <aside class="aside"><div class="filters">
     <h2>${t("Filtrera")}</h2>
     <div class="field"><label for="df-cat">${t("Kategori")}</label><select class="input" id="df-cat">${catOptions(DF.category, t("Alla kategorier"))}</select></div>
@@ -243,95 +306,106 @@ async function loadDashboard() {
   const days = d.series.length;
   const card = (key, label, href) => {
     const c = d.cards[key], diff = c.period - c.previous;
-    const trend = diff === 0
-      ? `<span>± 0</span> ${t("vs föregående {n} dagar", { n: days })}`
-      : `<span class="${diff > 0 ? "up" : "down"}">${diff > 0 ? ICON.up : ICON.down}<b>${Math.abs(diff)}</b></span> ${t("vs föregående {n} dagar", { n: days })}`;
-    return `<a class="card" href="${href}"><span class="ghost">${diff > 0 ? ICON.ghostUp : ICON.ghostDown}</span>
-      <div class="big">${c.value}</div><div><div class="lbl">${label}</div><div class="trend" title="${t("Nya ärenden i perioden ({a}) jämfört med perioden innan ({b})", { a: c.period, b: c.previous })}">${trend}</div></div></a>`;
+    const trend = t("nya jämfört med föregående {d} dagar", { d: days });
+    return `<a class="kpi" href="${href}"><span class="kpi-label">${label}</span><span class="kpi-value">${c.value}</span>
+      <span class="kpi-trend"><span class="kpi-delta ${diff > 0 ? "up" : diff < 0 ? "down" : ""}">${diff > 0 ? "+" + diff : diff < 0 ? "−" + -diff : "±0"}</span>${trend}</span></a>`;
   };
-  const ring = (pct, title, desc) => {
-    const r = 58, C = 2 * Math.PI * r, p = Math.max(0, Math.min(1, pct));
-    return `<div class="ring"><svg viewBox="0 0 140 140" role="img" aria-label="${title}: ${Math.round(p * 100)} %">
-      <circle cx="70" cy="70" r="${r}" fill="none" stroke="#d9d8e2" stroke-width="7"/>
-      <circle cx="70" cy="70" r="${r}" fill="none" stroke="var(--chart-a)" stroke-width="7" stroke-linecap="round"
-        stroke-dasharray="${(C * p).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 70 70)"${p === 0 ? ' opacity="0"' : ""}/>
-      <text x="70" y="70" text-anchor="middle" dominant-baseline="central" font-size="34" fill="var(--band-2)" font-family="Barlow, Segoe UI, sans-serif">${Math.round(p * 100)}%</text></svg>
-      <div><div class="t">${title}</div><div class="d">${desc}</div></div></div>`;
-  };
+  const closedPct = d.created ? Math.round(100 * d.created_closed / d.created) : null;
   const ret = d.customers_total - d.customers_new;
+  const breakdown = (d.closed_breakdown || []).map(x => `${x.n} ${esc(tv(x.name).toLowerCase())}`).join(", ");
+  const totC = d.series.reduce((a, x) => a + x.created, 0), totX = d.series.reduce((a, x) => a + x.closed, 0);
   body.innerHTML = `
-    <div class="cards">
+    <h2 class="sec-title">${t("Just nu")}</h2>
+    <div class="kpis">
       ${card("unassigned", t("Ej tilldelade"), "#/tickets?status=open&assignee=none")}
       ${card("open", t("Öppna ärenden"), "#/tickets?status=open")}
       ${card("high", t("Hög prioritet"), "#/tickets?status=open&priority=H%C3%B6g")}
     </div>
-    <div class="rings">
-      ${ring(d.created ? d.created_closed / d.created : 0, t("Avslutade i perioden"), t("{list} av {n} ärenden som skapades i perioden", { list: (d.closed_breakdown || []).map(x => `${x.n} ${esc(tv(x.name).toLowerCase())}`).join(", ") || "0", n: d.created }))}
-      ${ring(d.customers_total ? d.customers_new / d.customers_total : 0, t("Nya beställare"), `${d.customers_new} ${d.customers_new === 1 ? t("ny beställare") : t("nya beställare")}<br>${t("{n} återkommande", { n: ret })}`)}
+    <h2 class="sec-title">${t("Under perioden")}</h2>
+    <div class="stats">
+      <div class="stat"><span class="kpi-label">${t("Avslutade i perioden")}</span>
+        <span class="stat-value">${closedPct === null ? "–" : closedPct + " %"}</span>
+        <span class="stat-sub">${d.created ? t("{list} av {n} ärenden som skapades i perioden", { list: breakdown || "0", n: d.created }) : t("Inga ärenden skapades i perioden.")}</span></div>
+      <div class="stat"><span class="kpi-label">${t("Nya beställare")}</span>
+        <span class="stat-value">${d.customers_total ? t("{a} av {b}", { a: d.customers_new, b: d.customers_total }) : "–"}</span>
+        <span class="stat-sub">${d.customers_total ? t("{n} återkommande", { n: ret }) : t("Inga ärenden med beställare i perioden.")}</span></div>
+      <div class="stat"><span class="kpi-label">${t("Skapade")}</span><span class="stat-value">${totC}</span>
+        <span class="stat-sub">${t("{n} avslutade under samma period", { n: totX })}</span></div>
     </div>
-    <h2 class="sec-title">${t("Skapade och avslutade per dag")}</h2>
-    <div class="chart-wrap">
-      <div class="legend"><span><i style="background:var(--chart-a)"></i>${t("Skapade")} (${d.series.reduce((a, x) => a + x.created, 0)})</span><span><i style="background:var(--chart-b)"></i>${t("Avslutade")} (${d.series.reduce((a, x) => a + x.closed, 0)})</span></div>
-      <div class="chart" id="chart"></div>
-      <div class="tip" id="tip" hidden></div>
+    <div class="chart-card">
+      <div class="chart-head"><h2 class="sec-title" style="margin:0">${t("Skapade och avslutade per dag")}</h2>
+        <div class="legend"><span><i style="background:var(--chart-a)"></i>${t("Skapade")}</span><span><i style="background:var(--chart-b)"></i>${t("Avslutade")}</span></div></div>
+      <div class="chart-wrap"><div class="chart" id="chart"></div><div class="tip" id="tip" hidden></div></div>
     </div>`;
   drawChart(d.series);
 }
 
 function drawChart(series) {
   const host = $("#chart"); if (!host) return;
-  const W = 900, H = 300, L = 40, R = 16, T = 12, B = 34;
+  const W = 900, H = 280, L = 36, R = 8, T = 12, B = 30;
   const n = series.length, maxV = Math.max(1, ...series.map(s => Math.max(s.created, s.closed)));
   const step = maxV <= 5 ? 1 : maxV <= 10 ? 2 : Math.ceil(maxV / 5);
   const top = Math.ceil(maxV / step) * step;
-  const x = i => L + (n === 1 ? (W - L - R) / 2 : i * (W - L - R) / (n - 1));
+  const slot = (W - L - R) / n;
+  const bw = Math.max(3, Math.min(18, slot * 0.34));
   const y = v => T + (H - T - B) * (1 - v / top);
+  const base = y(0);
   const wd = new Intl.DateTimeFormat(LOCALE(), { weekday: "short" });
   const label = s => { const [yy, mm, dd] = s.date.split("-").map(Number); const dt = new Date(yy, mm - 1, dd); return n <= 10 ? `${wd.format(dt)} ${dd}` : `${dd}/${mm}`; };
   const every = Math.max(1, Math.ceil(n / 10));
-  let g = "";
-  for (let v = 0; v <= top; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="#ecebf2"/><text x="${L - 8}" y="${y(v)}" text-anchor="end" dominant-baseline="central">${v}</text>`;
-  series.forEach((s, i) => { if (i % every === 0 || i === n - 1) g += `<text x="${x(i)}" y="${H - 10}" text-anchor="middle">${label(s)}</text>`; });
-  const path = key => series.map((s, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(s[key]).toFixed(1)}`).join("");
-  const area = key => `${path(key)}L${x(n - 1).toFixed(1)},${y(0)}L${x(0).toFixed(1)},${y(0)}Z`;
-  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("Diagram över skapade och avslutade ärenden per dag")}">
-    ${g}
-    <path d="${area("created")}" fill="var(--chart-a)" fill-opacity=".14"/>
-    <path d="${area("closed")}" fill="var(--chart-b)" fill-opacity=".14"/>
-    <path d="${path("created")}" fill="none" stroke="var(--chart-a)" stroke-width="2" stroke-linejoin="round"/>
-    <path d="${path("closed")}" fill="none" stroke="var(--chart-b)" stroke-width="2" stroke-linejoin="round"/>
-    <line id="xh" y1="${T}" y2="${y(0)}" stroke="#b9b6c9" stroke-dasharray="3 3" visibility="hidden"/>
-    <circle id="da" r="4.5" fill="var(--chart-a)" stroke="#fff" stroke-width="2" visibility="hidden"/>
-    <circle id="db" r="4.5" fill="var(--chart-b)" stroke="#fff" stroke-width="2" visibility="hidden"/>
-    <rect id="hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/>
-  </svg>`;
-  const svg = $("svg", host), tip = $("#tip"), xh = $("#xh", svg), da = $("#da", svg), db = $("#db", svg);
-  const longFmt = new Intl.DateTimeFormat(LOCALE(), { weekday: "long", day: "numeric", month: "long" });
-  const show = evt => {
-    const pt = svg.getBoundingClientRect(); const sx = (evt.clientX - pt.left) * W / pt.width;
-    const i = Math.max(0, Math.min(n - 1, Math.round(n === 1 ? 0 : (sx - L) / ((W - L - R) / (n - 1)))));
-    const s = series[i];
-    [xh, da, db].forEach(e => e.setAttribute("visibility", "visible"));
-    xh.setAttribute("x1", x(i)); xh.setAttribute("x2", x(i));
-    da.setAttribute("cx", x(i)); da.setAttribute("cy", y(s.created));
-    db.setAttribute("cx", x(i)); db.setAttribute("cy", y(s.closed));
-    const [yy, mm, dd] = s.date.split("-").map(Number);
-    tip.innerHTML = `<div>${longFmt.format(new Date(yy, mm - 1, dd))}</div><div class="row"><i style="background:var(--chart-a)"></i>${t("Skapade")}: ${s.created}</div><div class="row"><i style="background:var(--chart-b)"></i>${t("Avslutade")}: ${s.closed}</div>`;
-    tip.hidden = false;
-    const wrapBox = host.parentElement.getBoundingClientRect();
-    tip.style.left = Math.min(Math.max(x(i) * pt.width / W + pt.left - wrapBox.left, 70), wrapBox.width - 70) + "px";
-    tip.style.top = (Math.min(y(s.created), y(s.closed)) * pt.height / H + pt.top - wrapBox.top - 10) + "px";
+  const bar = (x, v, color) => {
+    if (!v) return "";
+    const h = base - y(v), r = Math.min(4, bw / 2, h);
+    return `<path d="M${x},${base}V${base - h + r}Q${x},${base - h} ${x + r},${base - h}H${x + bw - r}Q${x + bw},${base - h} ${x + bw},${base - h + r}V${base}Z" fill="${color}"/>`;
   };
-  const hide = () => { [xh, da, db].forEach(e => e.setAttribute("visibility", "hidden")); tip.hidden = true; };
-  $("#hit", svg).addEventListener("mousemove", show);
-  $("#hit", svg).addEventListener("mouseleave", hide);
+  let g = "";
+  for (let v = 0; v <= top; v += step) g += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" style="stroke:${v ? "var(--grid)" : "var(--grid-0)"}"/><text x="${L - 8}" y="${y(v)}" text-anchor="end" dominant-baseline="central">${v}</text>`;
+  series.forEach((s, i) => {
+    const cx = L + slot * i + slot / 2;
+    g += `<rect class="day-hl" data-i="${i}" x="${L + slot * i + 1}" y="${T}" width="${slot - 2}" height="${base - T}" rx="6" fill="transparent"/>`;
+    g += bar(cx - bw - 1, s.created, "var(--chart-a)") + bar(cx + 1, s.closed, "var(--chart-b)");
+    if (i % every === 0 || i === n - 1) g += `<text x="${cx}" y="${H - 8}" text-anchor="middle">${label(s)}</text>`;
+  });
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("Diagram över skapade och avslutade ärenden per dag")}">${g}</svg>`;
+  const svg = $("svg", host), tip = $("#tip");
+  const longFmt = new Intl.DateTimeFormat(LOCALE(), { weekday: "long", day: "numeric", month: "long" });
+  $$(".day-hl", svg).forEach(r => {
+    r.addEventListener("mouseenter", () => {
+      $$(".day-hl", svg).forEach(x => x.style.fill = "");
+      r.style.fill = "var(--grid-hl)";
+      const i = +r.dataset.i, s = series[i];
+      const [yy, mm, dd] = s.date.split("-").map(Number);
+      tip.innerHTML = `<div>${longFmt.format(new Date(yy, mm - 1, dd))}</div><div class="row"><i style="background:var(--chart-a)"></i>${t("Skapade")}: ${s.created}</div><div class="row"><i style="background:var(--chart-b)"></i>${t("Avslutade")}: ${s.closed}</div>`;
+      tip.hidden = false;
+      const pt = svg.getBoundingClientRect(), wrap = host.parentElement.getBoundingClientRect();
+      const cx = (L + slot * i + slot / 2) * pt.width / W + pt.left - wrap.left;
+      tip.style.left = Math.min(Math.max(cx, 80), wrap.width - 80) + "px";
+      tip.style.top = (y(Math.max(s.created, s.closed)) * pt.height / H + pt.top - wrap.top - 10) + "px";
+    });
+  });
+  svg.addEventListener("mouseleave", () => { $$(".day-hl", svg).forEach(x => x.style.fill = ""); tip.hidden = true; });
 }
 
 /* =========================================================== ÄRENDELISTA */
 const TF_DEFAULT = { view: "open", priority: "", category: "", customer: "", assignee: "", created_from: "", created_to: "", closed_from: "", closed_to: "", q: "", sort: "date_desc" };
 let TF = loadPref("tickets", TF_DEFAULT), TPAGE = 1;
+let FP = loadPref("filterpanel", { open: window.innerWidth > 1280 });
 const selected = new Set();
-let armedBulk = null;
+let armedBulk = null, LIST_CUSTOMERS = [];
+
+const viewLabel = v => v === "open" ? t("Öppna (ej avslutade)") : v === "" ? t("Alla utom arkiverade") : v === "closed" ? t("Alla avslutade") : v === "archived" ? t("Arkiverade") : tv(v);
+function activeFilters() {
+  const f = [];
+  const fmtD = iso => iso ? new Intl.DateTimeFormat(LOCALE(), { day: "numeric", month: "short" }).format(new Date(iso + "T12:00")) : "…";
+  if (TF.view !== "open") f.push(["view", `${t("Status")}: ${viewLabel(TF.view)}`]);
+  if (TF.priority) f.push(["priority", `${t("Prioritet")}: ${tv(TF.priority)}`]);
+  if (TF.category) f.push(["category", `${t("Kategori")}: ${TF.category === "none" ? t("Utan kategori") : tv((S.categories.find(c => String(c.id) === String(TF.category)) || {}).name || "?")}`]);
+  if (TF.customer) f.push(["customer", `${t("Beställare_1")}: ${(LIST_CUSTOMERS.find(c => String(c.id) === String(TF.customer)) || {}).name || "?"}`]);
+  if (TF.assignee) f.push(["assignee", `${t("Handläggare")}: ${TF.assignee === "none" ? t("Ej tilldelad") : (S.users.find(u => String(u.id) === String(TF.assignee)) || {}).name || "?"}`]);
+  if (TF.created_from || TF.created_to) f.push(["created", `${t("Skapad")}: ${fmtD(TF.created_from)} – ${fmtD(TF.created_to)}`]);
+  if (TF.closed_from || TF.closed_to) f.push(["closed", `${t("Avslutad")}: ${fmtD(TF.closed_from)} – ${fmtD(TF.closed_to)}`]);
+  return f;
+}
 
 async function pageTickets(query) {
   if (Object.keys(query).length) {
@@ -344,37 +418,45 @@ async function pageTickets(query) {
     history.replaceState(null, "", "#/tickets");
   }
   selected.clear(); armedBulk = null;
-  const el = shell("tickets", t("Ärenden"));
-  let customers = [];
-  try { customers = (await api("GET", "/api/customers")).items; } catch (e) {}
-  const views = [["open", t("Öppna (ej avslutade)")], ["", t("Alla utom arkiverade")], ...S.statuses.map(x => [x, tv(x)]), ["closed", t("Alla avslutade")], ["archived", t("Arkiverade")]];
+  const el = shell("tickets", t("Ärenden"), FP.open ? "" : "no-aside");
+  try { LIST_CUSTOMERS = (await api("GET", "/api/customers")).items; } catch (e) {}
+  const views = [["open", viewLabel("open")], ["", viewLabel("")], ...S.statuses.map(x => [x, tv(x)]), ["closed", viewLabel("closed")], ["archived", viewLabel("archived")]];
   el.innerHTML = `<section class="work">
-    <div class="toolbar">
-      <label class="check"><input type="checkbox" id="sel-all"> ${t("Markera alla")}</label>
-      <select class="sortsel" id="b-status" disabled aria-label="${t("Ändra status på markerade")}"><option value="">${t("Ändra status …")}</option>${statusOptions(null)}</select>
-      <button class="textbtn" id="b-archive" type="button" disabled>${t("Arkivera")}</button>
-      <button class="textbtn danger" id="b-delete" type="button" disabled>${t("Ta bort")}</button>
-      <label class="check">${t("Sortera:")}
-        <select class="sortsel" id="t-sort">
-          ${[["date_desc", t("Datum, nyast")], ["date_asc", t("Datum, äldst")], ["priority", t("Prioritet")], ["status", t("Status")], ["updated", t("Senast ändrad")]].map(([v, l]) => `<option value="${v}"${TF.sort === v ? " selected" : ""}>${l}</option>`).join("")}
-        </select></label>
-      <span class="grow"></span>
-      <input class="input search" id="t-q" type="search" placeholder="${t("Sök ärende, beställare eller nummer")}" value="${esc(TF.q)}" aria-label="${t("Sök")}">
-      <div class="pager" id="pager"></div>
+    <div class="list-head">
+      <label class="searchbar">${ICON.search}<input id="t-q" type="search" placeholder="${t("Sök ärende, beställare eller nummer")}" value="${esc(TF.q)}" aria-label="${t("Sök")}"></label>
+      <label class="sortlbl">${t("Sortera:")}
+        <select class="sortsel" id="t-sort">${[["date_desc", t("Datum, nyast")], ["date_asc", t("Datum, äldst")], ["priority", t("Prioritet")], ["status", t("Status")], ["updated", t("Senast ändrad")]].map(([v, l]) => `<option value="${v}"${TF.sort === v ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+      <button class="btn" id="f-toggle" type="button" aria-expanded="${FP.open}" aria-controls="fpanel">${ICON.filter}${t("Filter")}<span class="fcount" id="fcount" hidden></span></button>
     </div>
-    <div class="tlist" id="tlist"><p class="muted">${t("Hämtar …")}</p></div>
-    <div class="bulkbar">
-      <button class="btn" id="b-archive-all" type="button"></button>
-      <a class="btn" href="/api/export.xlsx?tz=${TZ()}&lang=${LANG}">${ICON.excel}${t("Exportera till Excel")}</a>
+    <div class="chips" id="chips"></div>
+    <div class="bulkbar2" id="bulk" hidden>
+      <b id="bulk-n"></b>
+      <select class="sortsel" id="b-status" aria-label="${t("Ändra status på markerade")}"><option value="">${t("Ändra status …")}</option>${statusOptions(null)}</select>
+      <button class="btn btn-sm" id="b-archive" type="button">${t("Arkivera")}</button>
+      <button class="btn btn-sm btn-danger" id="b-delete" type="button">${t("Ta bort")}</button>
+      <span class="grow"></span>
+      <button class="textbtn" id="b-clear" type="button">${t("Avmarkera")}</button>
+    </div>
+    <div class="thead" role="presentation">
+      <label class="check"><input type="checkbox" id="sel-all" aria-label="${t("Markera alla")}"></label>
+      <span>${t("Ärende")}</span><span class="c-ag">${t("Handläggare")}</span><span class="c-date">${t("Skapad")}</span><span>${t("Prioritet")}</span><span>${t("Status")}</span>
+    </div>
+    <div class="tlist" id="tlist"><p class="muted" style="padding:16px">${t("Hämtar …")}</p></div>
+    <div class="list-foot">
+      <div class="pager" id="pager"></div>
+      <div class="foot-actions">
+        <button class="btn" id="b-archive-all" type="button"></button>
+        <a class="btn" href="/api/export.xlsx?tz=${TZ()}&lang=${LANG}">${ICON.excel}${t("Exportera till Excel")}</a>
+      </div>
     </div>
   </section>
-  <aside class="aside"><div class="filters">
-    <h2>${t("Filtrera ärenden")}</h2>
-    <div class="field"><label for="f-cat">${t("Kategori")}</label><select class="input" id="f-cat"><option value="">${t("Alla")}</option><option value="none"${TF.category === "none" ? " selected" : ""}>${t("Utan kategori")}</option>${catOptions(TF.category)}</select></div>
-    <div class="field"><label for="f-view">${t("Status")}</label><select class="input" id="f-view">${views.map(([v, l]) => `<option value="${v}"${TF.view === v ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+  <aside class="aside" id="fpanel"${FP.open ? "" : " hidden"}><div class="filters">
+    <div class="f-head"><h2>${t("Filtrera ärenden")}</h2><button class="iconbtn" id="f-close" type="button" aria-label="${t("Stäng filter")}">${ICON.x}</button></div>
+    <div class="field"><label for="f-view">${t("Status")}</label><select class="input" id="f-view">${views.map(([v, l]) => `<option value="${esc(v)}"${TF.view === v ? " selected" : ""}>${esc(l)}</option>`).join("")}</select></div>
     <div class="field"><label for="f-prio">${t("Prioritet")}</label><select class="input" id="f-prio">${prioOptions(TF.priority, t("Alla"))}</select></div>
-    <div class="field"><label for="f-cust">${t("Beställare_1")}</label><select class="input" id="f-cust"><option value="">${t("Alla")}</option>${customers.map(c => `<option value="${c.id}"${String(TF.customer) === String(c.id) ? " selected" : ""}>${esc(c.name)}${c.company ? " – " + esc(c.company) : ""}</option>`).join("")}</select></div>
+    <div class="field"><label for="f-cat">${t("Kategori")}</label><select class="input" id="f-cat"><option value="">${t("Alla")}</option><option value="none"${TF.category === "none" ? " selected" : ""}>${t("Utan kategori")}</option>${catOptions(TF.category)}</select></div>
     <div class="field"><label for="f-ass">${t("Handläggare")}</label><select class="input" id="f-ass"><option value="">${t("Alla")}</option><option value="none"${TF.assignee === "none" ? " selected" : ""}>${t("Ej tilldelad")}</option>${S.users.map(u => `<option value="${u.id}"${String(TF.assignee) === String(u.id) ? " selected" : ""}>${esc(u.name)}</option>`).join("")}</select></div>
+    <div class="field"><label for="f-cust">${t("Beställare_1")}</label><select class="input" id="f-cust"><option value="">${t("Alla")}</option>${LIST_CUSTOMERS.map(c => `<option value="${c.id}"${String(TF.customer) === String(c.id) ? " selected" : ""}>${esc(c.name)}${c.company ? " – " + esc(c.company) : ""}</option>`).join("")}</select></div>
     <div class="field"><span class="label">${t("Skapad mellan")}</span><div class="pair">
       <input class="input" type="date" id="f-cf" value="${TF.created_from}" aria-label="${t("Skapad från")}">
       <input class="input" type="date" id="f-ct" value="${TF.created_to}" aria-label="${t("Skapad till")}"></div></div>
@@ -384,6 +466,14 @@ async function pageTickets(query) {
     <button class="reset" type="button" id="f-reset">${t("Rensa filter")}</button>
   </div></aside>`;
 
+  const setPanel = open => {
+    FP.open = open; savePref("filterpanel", FP);
+    $("#fpanel").hidden = !open; el.classList.toggle("no-aside", !open);
+    $("#f-toggle").setAttribute("aria-expanded", String(open));
+  };
+  $("#f-toggle").addEventListener("click", () => setPanel(!FP.open));
+  $("#f-close").addEventListener("click", () => setPanel(false));
+
   const readFilters = () => {
     TF = Object.assign(TF, { category: $("#f-cat").value, view: $("#f-view").value, priority: $("#f-prio").value, customer: $("#f-cust").value,
       assignee: $("#f-ass").value, created_from: $("#f-cf").value, created_to: $("#f-ct").value, closed_from: $("#f-xf").value, closed_to: $("#f-xt").value,
@@ -392,8 +482,9 @@ async function pageTickets(query) {
   };
   ["#f-cat", "#f-view", "#f-prio", "#f-cust", "#f-ass", "#f-cf", "#f-ct", "#f-xf", "#f-xt", "#t-sort"].forEach(s => $(s).addEventListener("change", readFilters));
   let qTimer; $("#t-q").addEventListener("input", e => { clearTimeout(qTimer); qTimer = setTimeout(() => { TF.q = e.target.value; savePref("tickets", TF); TPAGE = 1; loadTickets(); }, 250); });
-  $("#f-reset").addEventListener("click", () => { TF = Object.assign({}, TF_DEFAULT); savePref("tickets", TF); TPAGE = 1; pageTickets({}); });
+  $("#f-reset").addEventListener("click", () => { TF = Object.assign({}, TF_DEFAULT, { sort: TF.sort }); savePref("tickets", TF); TPAGE = 1; pageTickets({}); });
   $("#sel-all").addEventListener("change", e => { $$(".rowsel").forEach(c => { c.checked = e.target.checked; c.checked ? selected.add(+c.value) : selected.delete(+c.value); }); updateBulk(); });
+  $("#b-clear").addEventListener("click", () => { selected.clear(); $$(".rowsel").forEach(c => c.checked = false); updateBulk(); });
 
   const bulk = async (action, btn, label) => {
     if (action === "delete" && armedBulk !== "delete") { armedBulk = "delete"; btn.classList.add("armed"); btn.textContent = t("Bekräfta: ta bort {n}", { n: selected.size }); return; }
@@ -434,17 +525,42 @@ function ticketQuery(extra = {}) {
   return qs(Object.assign(q, extra));
 }
 
+function renderChips() {
+  const box = $("#chips"); if (!box) return;
+  const f = activeFilters();
+  const fc = $("#fcount"); fc.hidden = !f.length; fc.textContent = f.length;
+  const qchip = TF.q ? [["q", `${t("Sök")}: "${TF.q}"`]] : [];
+  const all = [...qchip, ...f];
+  box.hidden = !all.length;
+  box.innerHTML = all.map(([k, l]) => `<span class="chip">${esc(l)}<button type="button" data-k="${k}" aria-label="${t("Ta bort filter {f}", { f: esc(l) })}">${ICON.x}</button></span>`).join("") +
+    (all.length > 1 ? `<button type="button" class="textbtn" id="chips-clear">${t("Rensa alla")}</button>` : "");
+  $$(".chip button", box).forEach(b => b.addEventListener("click", () => {
+    const k = b.dataset.k;
+    if (k === "view") TF.view = "open";
+    else if (k === "created") { TF.created_from = ""; TF.created_to = ""; }
+    else if (k === "closed") { TF.closed_from = ""; TF.closed_to = ""; }
+    else TF[k] = "";
+    savePref("tickets", TF); TPAGE = 1; pageTickets({});
+  }));
+  const cc = $("#chips-clear");
+  if (cc) cc.addEventListener("click", () => { TF = Object.assign({}, TF_DEFAULT, { sort: TF.sort }); savePref("tickets", TF); TPAGE = 1; pageTickets({}); });
+}
+
 function updateBulk() {
   const n = selected.size;
-  ["#b-status", "#b-archive", "#b-delete"].forEach(s => { const b = $(s); if (b) b.disabled = !n; });
+  const bar = $("#bulk"); if (!bar) return;
+  bar.hidden = !n;
+  $("#bulk-n").textContent = t("{n} markerade", { n });
   const del = $("#b-delete");
-  if (del && armedBulk !== "delete") { del.classList.remove("armed"); del.textContent = n ? `${t("Ta bort")} (${n})` : t("Ta bort"); }
+  if (armedBulk !== "delete") { del.classList.remove("armed"); del.textContent = t("Ta bort"); }
+  $$(".trow2").forEach(r => r.classList.toggle("sel", selected.has(+r.dataset.id)));
   const all = $$(".rowsel"); const sa = $("#sel-all");
   if (sa) { sa.checked = all.length > 0 && all.every(c => c.checked); sa.indeterminate = n > 0 && !sa.checked; }
 }
 
 async function loadTickets() {
   const list = $("#tlist"); if (!list) return;
+  renderChips();
   let r, closedCount = 0;
   try {
     [r, closedCount] = await Promise.all([
@@ -468,24 +584,30 @@ async function loadTickets() {
   $$("#pager button").forEach(b => b.addEventListener("click", () => { TPAGE = +b.dataset.p; selected.clear(); loadTickets(); }));
 
   if (!r.items.length) {
-    list.innerHTML = `<div class="empty">${TF.q || TF.view !== "open" || TF.priority || TF.category || TF.customer || TF.assignee || TF.created_from || TF.created_to || TF.closed_from || TF.closed_to
-      ? t("Inga ärenden matchar filtret.") : t("Inga öppna ärenden. Skapa ett nytt med knappen <b>Ny</b>.")}</div>`;
+    const filtered = activeFilters().length || TF.q;
+    list.innerHTML = filtered
+      ? emptyState(ICON.inbox, t("Inga ärenden matchar filtret."), `<button class="btn" type="button" id="es-clear">${t("Rensa filter")}</button>`)
+      : emptyState(ICON.inbox, t("Inga öppna ärenden just nu."), `<a class="btn btn-mint" href="#/tickets/new">${ICON.plusSm}${t("Skapa ärende")}</a>`);
+    const c = $("#es-clear");
+    if (c) c.addEventListener("click", () => { TF = Object.assign({}, TF_DEFAULT, { sort: TF.sort }); savePref("tickets", TF); pageTickets({}); });
     updateBulk(); return;
   }
-  list.innerHTML = r.items.map(t => `<div class="trow">
-      <input type="checkbox" class="rowsel" value="${t.id}" aria-label="${tr("Markera ärende {id}", { id: t.id })}"${selected.has(t.id) ? " checked" : ""}>
-      <span class="av">${avatar("md")}</span>
-      <div class="tmain" style="min-width:0">
-        <div class="who">${esc(t.customer_name || tr("Ingen beställare"))}${t.customer_company ? ` <span class="muted">· ${esc(t.customer_company)}</span>` : ""}</div>
-        <a class="ttl" href="#/tickets/${t.id}">${esc(t.title)}</a>
-        <div class="sub"><span class="id">#${t.id}</span><span>${esc(t.category ? tv(t.category) : tr("Ingen kategori"))}</span><span class="ag">${t.assignee_name ? esc(t.assignee_name) : tr("Ej tilldelad")}</span>${t.archived_at ? `<span>${tr("Arkiverad")}</span>` : ""}</div>
+  const lockedFor = s => statusInfo(s).locked && S.user.role !== "admin";
+  list.innerHTML = r.items.map(tk => `<div class="trow2" data-id="${tk.id}">
+      <input type="checkbox" class="rowsel" value="${tk.id}" aria-label="${t("Markera ärende {id}", { id: tk.id })}"${selected.has(tk.id) ? " checked" : ""}>
+      <div class="tm">
+        <a class="ttl" href="#/tickets/${tk.id}">${esc(tk.title)}</a>
+        <div class="sub"><span class="id">#${tk.id}</span>
+          <span class="who">${tk.customer_name ? ini(tk.customer_name, "xs") + esc(tk.customer_name) : t("Ingen beställare")}${tk.customer_company ? ` · ${esc(tk.customer_company)}` : ""}</span>
+          ${tk.category ? `<span>${esc(tv(tk.category))}</span>` : ""}${tk.archived_at ? `<span class="arch">${t("Arkiverad")}</span>` : ""}</div>
       </div>
-      <span class="date">${fmtDate(t.created_at)}</span>
-      <select class="inline-sel" data-id="${t.id}" data-f="priority" aria-label="${tr("Prioritet för ärende {id}", { id: t.id })}">${prioOptions(t.priority)}</select>
-      <select class="inline-sel st sc-${statusInfo(t.status).color}" data-id="${t.id}" data-f="status" aria-label="${tr("Status för ärende {id}", { id: t.id })}"${statusInfo(t.status).locked && S.user.role !== "admin" ? ` disabled title="${tr("Låst status – kan inte öppnas igen")}"` : ""}>${statusOptions(t.status)}</select>
+      <div class="c-ag ag">${tk.assignee_name ? ini(tk.assignee_name, "xs") + `<span>${esc(tk.assignee_name)}</span>` : `<span class="unassigned">${t("Ej tilldelad")}</span>`}</div>
+      <span class="c-date date">${fmtDate(tk.created_at)}</span>
+      <select class="pill-sel p-${esc(tk.priority)}" data-id="${tk.id}" data-f="priority" aria-label="${t("Prioritet för ärende {id}", { id: tk.id })}">${prioOptions(tk.priority)}</select>
+      <select class="pill-sel sc-${statusInfo(tk.status).color}" data-id="${tk.id}" data-f="status" aria-label="${t("Status för ärende {id}", { id: tk.id })}"${lockedFor(tk.status) ? ` disabled title="${t("Låst status – kan inte öppnas igen")}"` : ""}>${statusOptions(tk.status)}</select>
     </div>`).join("");
   $$(".rowsel", list).forEach(c => c.addEventListener("change", () => { c.checked ? selected.add(+c.value) : selected.delete(+c.value); armedBulk = null; updateBulk(); }));
-  $$(".inline-sel", list).forEach(s => s.addEventListener("change", async () => {
+  $$(".pill-sel", list).forEach(s => s.addEventListener("change", async () => {
     try { await api("PUT", "/api/tickets/" + s.dataset.id, { [s.dataset.f]: s.value }); toast(t("Ärende #{id} uppdaterat.", { id: s.dataset.id })); loadTickets(); }
     catch (e) { toast(e.message, true); loadTickets(); }
   }));
@@ -494,135 +616,164 @@ async function loadTickets() {
 
 /* =========================================================== NYTT / VISA ÄRENDE */
 async function pageTicket(id, query) {
-  const el = shell("tickets", id ? tr("Ärende") : tr("Nytt ärende"));
-  let t = { title: "", details: "", priority: "Medium", category_id: "", assignee_id: "", status: "Ny", customer_id: query.customer ? Number(query.customer) : null };
+  const el = shell("tickets", id ? t("Ärende") : t("Nytt ärende"), "ticket-layout");
+  let tk = { title: "", details: "", priority: "Medium", category_id: "", assignee_id: "", status: "", customer_id: query.customer ? Number(query.customer) : null };
   if (id) {
-    try { t = await api("GET", "/api/tickets/" + id); }
-    catch (e) { el.innerHTML = `<section class="work"><p class="err">${esc(e.message)}</p><p><a href="#/tickets">${tr("Tillbaka till ärenden")}</a></p></section>`; return; }
+    try { tk = await api("GET", "/api/tickets/" + id); viewTheme(tk.customer_theme); }
+    catch (e) { el.innerHTML = `<section class="work">${emptyState(ICON.inbox, esc(e.message), `<a class="btn" href="#/tickets">${t("Tillbaka till ärenden")}</a>`)}</section>`; return; }
   }
   let customers = [];
   try { customers = (await api("GET", "/api/customers")).items; } catch (e) {}
-  let custId = t.customer_id, custQ = "", addingCustomer = false, armedDel = false;
+  let custId = tk.customer_id, custQ = "", picking = !custId, addingCustomer = false, armedDel = false;
+  const locked = id && tk.status_locked && S.user.role !== "admin";
+  const firstOpen = (S.statusList.find(x => !x.closed) || { name: "Ny" }).name;
 
-  el.innerHTML = `<section class="work"><form class="tform" id="tform" novalidate>
-      <div class="head"><h2>${id ? tr("Ärendedetaljer") : tr("Nytt ärende")}</h2><span class="num">${id ? "# " + id : ""}</span></div>
-      <div class="grid">
-        <div class="field"><label for="t-title">${tr("Titel")}</label><input class="input" id="t-title" maxlength="200" value="${esc(t.title)}" placeholder="${tr("Kort sammanfattning")}"></div>
-        <div class="field"><label for="t-prio">${tr("Prioritet")}</label><select class="input" id="t-prio">${prioOptions(t.priority)}</select></div>
-        <div class="field"><label for="t-cat">${tr("Kategori")}</label><select class="input" id="t-cat"><option value="">${tr("Ingen kategori")}</option>${catOptions(t.category_id)}</select></div>
-        <div class="field"><label for="t-ass">${tr("Handläggare")}</label><select class="input" id="t-ass">${userOptions(t.assignee_id, tr("Ej tilldelad"), t.assignee_id)}</select></div>
-        ${id ? `<div class="field"><label for="t-status">${tr("Status")}</label><select class="input" id="t-status"${t.status_locked && S.user.role !== "admin" ? " disabled" : ""}>${statusOptions(t.status)}</select>
-            ${t.status_locked ? `<span class="muted" style="font-size:.85rem">${S.user.role === "admin" ? tr("Låst status. Bara administratörer kan öppna ärendet igen.") : tr("Låst status. Ärendet kan inte öppnas igen.")}</span>` : ""}</div>`
-             : `<div class="field"><span class="label">${tr("Datum")}</span><div class="input" style="display:flex;align-items:center">${fmtDate(Date.now() / 1000)}</div></div>`}
-      </div>
+  el.innerHTML = `<section class="work"><div class="tform2">
+      <div class="t-top"><a class="back" href="#/tickets">${ICON.back}${t("Ärenden")}</a>${id ? `<span class="num">#${id}</span>` : ""}</div>
+      <label class="sr" for="t-title">${t("Titel")}</label>
+      <input class="title-input" id="t-title" maxlength="200" value="${esc(tk.title)}" placeholder="${t("Rubrik för ärendet")}">
+      <div class="field"><label for="t-details">${t("Beskrivning")}</label>
+        <textarea class="input grow-ta" id="t-details" rows="5" placeholder="${t("Beskriv ärendet: vad har hänt, ordernummer, artikel …")}">${esc(tk.details)}</textarea></div>
       <div id="booking" class="booking" hidden></div>
-      <div class="field"><label for="t-details">${tr("Detaljer")}</label><textarea class="input" id="t-details" placeholder="${tr("Beskriv ärendet: vad har hänt, ordernummer, artikel …")}">${esc(t.details)}</textarea></div>
-      ${id ? `<div class="meta"><span>${tr("Skapat {d}", { d: fmtDT(t.created_at) })}${t.created_by_name ? " " + tr("av {n}", { n: esc(t.created_by_name) }) : ""}</span><span>${tr("Senast ändrat {d}", { d: fmtDT(t.updated_at) })}</span>${t.closed_at ? `<span>${tr("Avslutat {d}", { d: fmtDT(t.closed_at) })}</span>` : ""}${t.archived_at ? `<span>${tr("Arkiverat {d}", { d: fmtDT(t.archived_at) })}</span>` : ""}</div>` : ""}
-      ${id ? `<section class="comments" aria-labelledby="c-h">
-        <h3 id="c-h">${tr("Kommentarer")}</h3>
+      ${id ? `<section class="timeline" aria-labelledby="c-h">
+        <h3 id="c-h">${t("Kommentarer")}</h3>
         <div id="c-list"></div>
-        <div class="c-new">
-          <label for="c-body" class="label">${tr("Ny kommentar")}</label>
-          <textarea class="input" id="c-body" rows="3" placeholder="${tr("Skriv en kommentar …")}"></textarea>
-          <div><button type="button" class="btn btn-dark" id="c-add">${tr("Lägg till kommentar")}</button></div>
+        <div class="c-new">${ini(S.user.name, "sm")}
+          <div class="c-new-box"><label for="c-body" class="sr">${t("Ny kommentar")}</label>
+            <textarea class="input" id="c-body" rows="3" placeholder="${t("Skriv en kommentar …")}"></textarea>
+            <div class="c-new-act"><button type="button" class="btn btn-dark btn-sm" id="c-add">${t("Lägg till kommentar")}</button></div></div>
         </div>
       </section>` : ""}
-      <div class="foot">
-        <div class="right"><a class="textbtn" href="#/tickets">${tr("Avbryt")}</a>${id ? `<button type="button" class="btn btn-danger" id="t-del">${tr("Ta bort ärende")}</button>` : ""}</div>
-        <div class="right"><span class="muted" id="t-missing"></span><button type="submit" class="btn btn-dark" id="t-save">${ICON.save}${tr("Spara")}</button></div>
+      <div class="savebar">
+        <a class="textbtn" href="#/tickets">${t("Avbryt")}</a>
+        <span class="grow"></span>
+        <span class="muted" id="t-missing"></span>
+        <button type="button" class="btn btn-dark" id="t-save">${ICON.save}${id ? t("Spara ändringar") : t("Skapa ärende")}</button>
       </div>
-    </form></section>
-    <aside class="aside" id="cust-aside"></aside>`;
+    </div></section>
+    <aside class="aside meta" aria-label="${t("Ärendets uppgifter")}">
+      <div class="meta-grid">
+        <div class="field"><label for="t-status">${t("Status")}</label>
+          ${id ? `<select class="input" id="t-status"${locked ? " disabled" : ""}>${statusOptions(tk.status)}</select>
+            ${tk.status_locked ? `<span class="hint">${S.user.role === "admin" ? t("Låst status. Bara administratörer kan öppna ärendet igen.") : t("Låst status. Ärendet kan inte öppnas igen.")}</span>` : ""}`
+            : `<div>${statusPill(firstOpen)}</div>`}</div>
+        <div class="field"><label for="t-prio">${t("Prioritet")}</label><select class="input" id="t-prio">${prioOptions(tk.priority)}</select></div>
+        <div class="field"><label for="t-cat">${t("Kategori")}</label><select class="input" id="t-cat"><option value="">${t("Ingen kategori")}</option>${catOptions(tk.category_id)}</select></div>
+        <div class="field"><label for="t-ass">${t("Handläggare")}</label><select class="input" id="t-ass">${userOptions(tk.assignee_id, t("Ej tilldelad"), tk.assignee_id)}</select></div>
+      </div>
+      <div class="field"><span class="label">${t("Beställare_1")}</span><div id="req-box"></div></div>
+      ${id ? `<dl class="dates">
+        <div><dt>${t("Skapat")}</dt><dd>${fmtDT(tk.created_at)}${tk.created_by_name ? `<br><span class="muted">${t("av {n}", { n: esc(tk.created_by_name) })}</span>` : ""}</dd></div>
+        <div><dt>${t("Senast ändrat")}</dt><dd>${fmtDT(tk.updated_at)}</dd></div>
+        ${tk.closed_at ? `<div><dt>${t("Avslutat")}</dt><dd>${fmtDT(tk.closed_at)}</dd></div>` : ""}
+        ${tk.archived_at ? `<div><dt>${t("Arkiverat")}</dt><dd>${fmtDT(tk.archived_at)}</dd></div>` : ""}
+      </dl>
+      <button type="button" class="btn btn-danger btn-sm" id="t-del">${t("Ta bort ärende")}</button>` : ""}
+    </aside>`;
 
-  const renderAside = () => {
-    const a = $("#cust-aside");
+  const ta = $("#t-details");
+  const grow = () => { ta.style.height = "auto"; ta.style.height = Math.max(120, Math.min(ta.scrollHeight + 2, 520)) + "px"; };
+  ta.addEventListener("input", grow); grow();
+
+  const renderReq = () => {
+    const box = $("#req-box");
     if (addingCustomer) {
-      a.innerHTML = `<h2>${tr("Ny beställare")}</h2>${customerForm({}, "nc")}`;
-      bindCustomerForm(a, "nc", null, async c => { customers.push(c); custId = c.id; addingCustomer = false; renderAside(); validate(); toast(tr("{n} lades till.", { n: c.name })); },
-        () => { addingCustomer = false; renderAside(); });
+      box.innerHTML = customerForm({}, "nc");
+      bindCustomerForm(box, "nc", null, c => { customers.push(c); custId = c.id; picking = false; addingCustomer = false; renderReq(); validate(); toast(t("{n} lades till.", { n: c.name })); },
+        () => { addingCustomer = false; renderReq(); });
       return;
     }
     const sel = customers.find(c => c.id === custId);
+    if (sel && !picking) {
+      box.innerHTML = `<div class="req-card">${ini(sel.name, "md")}<div class="rc-txt"><div class="n">${esc(sel.name)}</div>
+        ${sel.company ? `<div class="c">${esc([sel.company, sel.title].filter(Boolean).join(", "))}</div>` : ""}
+        ${sel.phone ? `<div class="c">${esc(sel.phone)}</div>` : ""}${sel.email ? `<div class="c">${esc(sel.email)}</div>` : ""}</div>
+        <button type="button" class="btn btn-sm" id="req-change">${t("Byt")}</button></div>`;
+      $("#req-change").addEventListener("click", () => { picking = true; renderReq(); $("#c-q").focus(); });
+      return;
+    }
     const q = custQ.trim().toLowerCase();
-    const matches = customers.filter(c => !q || [c.name, c.company, c.email, c.phone].join(" ").toLowerCase().includes(q)).slice(0, 50);
-    a.innerHTML = `<h2>${tr("Koppla beställare")}</h2>
-      ${sel ? `<div class="sel-cust">${avatar("sm")}<div style="min-width:0"><div class="n">${esc(sel.name)}</div><div class="c">${esc([sel.company, sel.phone, sel.email].filter(Boolean).join(" · "))}</div></div></div>` : `<p class="muted" style="margin:0 0 14px">${tr("Ingen beställare vald ännu.")}</p>`}
-      <input class="searchpill" id="c-q" type="search" placeholder="${tr("Sök beställare")}" value="${esc(custQ)}" aria-label="${tr("Sök beställare")}">
-      <div class="or-add">${tr("eller")} <button type="button" id="c-add">${tr("Lägg till ny")}</button></div>
-      <div class="clist">${matches.length ? matches.map(c => `<button type="button" class="citem" data-id="${c.id}" aria-pressed="${c.id === custId}">${avatar("sm")}<span style="min-width:0"><span class="n">${esc(c.name)}</span><br><span class="c">${esc(c.company || c.email || "")}</span></span></button>`).join("")
-        : `<p class="muted">${customers.length ? tr("Ingen beställare matchar sökningen.") : tr("Inga beställare ännu. Lägg till den första.")}</p>`}</div>`;
+    const matches = customers.filter(c => !q || [c.name, c.company, c.email, c.phone].join(" ").toLowerCase().includes(q)).slice(0, 30);
+    box.innerHTML = `<div class="picker">
+      <label class="searchbar sm">${ICON.search}<input id="c-q" type="search" placeholder="${t("Sök beställare")}" value="${esc(custQ)}" aria-label="${t("Sök beställare")}"></label>
+      <div class="plist">${matches.length ? matches.map(c => `<button type="button" class="pitem" data-id="${c.id}" aria-pressed="${c.id === custId}">${ini(c.name, "sm")}<span><span class="n">${esc(c.name)}</span><span class="c">${esc(c.company || c.email || "")}</span></span></button>`).join("")
+        : `<p class="muted" style="margin:6px 4px">${customers.length ? t("Ingen beställare matchar sökningen.") : t("Inga beställare ännu. Lägg till den första.")}</p>`}</div>
+      <div class="picker-foot"><button type="button" class="textbtn" id="c-new">${ICON.plusSm}${t("Lägg till ny beställare")}</button>
+        ${custId ? `<button type="button" class="textbtn" id="c-cancel">${t("Avbryt")}</button>` : ""}</div></div>`;
     const qi = $("#c-q");
-    qi.addEventListener("input", () => { custQ = qi.value; const pos = qi.selectionStart; renderAside(); const n = $("#c-q"); n.focus(); n.setSelectionRange(pos, pos); });
-    $("#c-add").addEventListener("click", () => { addingCustomer = true; renderAside(); });
-    $$(".citem", a).forEach(b => b.addEventListener("click", () => { custId = +b.dataset.id; renderAside(); validate(); }));
+    qi.addEventListener("input", () => { custQ = qi.value; const pos = qi.selectionStart; renderReq(); const n = $("#c-q"); n.focus(); n.setSelectionRange(pos, pos); });
+    $("#c-new").addEventListener("click", () => { addingCustomer = true; renderReq(); });
+    if ($("#c-cancel")) $("#c-cancel").addEventListener("click", () => { picking = false; renderReq(); });
+    $$(".pitem", box).forEach(b => b.addEventListener("click", () => { custId = +b.dataset.id; picking = false; custQ = ""; renderReq(); validate(); }));
   };
 
   const validate = () => {
     const miss = [];
-    if (!$("#t-title").value.trim()) miss.push(tr("titel"));
-    if (!custId) miss.push(tr("beställare"));
+    if (!$("#t-title").value.trim()) miss.push(t("titel"));
+    if (!custId) miss.push(t("beställare"));
     $("#t-save").disabled = miss.length > 0;
-    $("#t-missing").textContent = miss.length ? tr("Ange {x} för att spara.", { x: miss.join(" " + tr("och") + " ") }) : "";
+    $("#t-missing").textContent = miss.length ? t("Ange {x} för att spara.", { x: miss.join(" " + t("och") + " ") }) : "";
   };
   $("#t-title").addEventListener("input", validate);
+  $("#t-title").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); save(); } });
+
   const renderBooking = () => {
     const box = $("#booking");
     if (!S.bookingCat || String($("#t-cat").value) !== String(S.bookingCat)) { box.hidden = true; return; }
     const u = S.users.find(x => String(x.id) === $("#t-ass").value);
     let inner;
-    if (!u) inner = `<p>${tr("Välj en handläggare för att kunna boka en tid.")}</p>`;
-    else if (!u.booking_url) inner = `<p>${tr("{n} har ingen bokningssida inlagd. Den läggs in under Inställningar.", { n: esc(u.name) })}</p>`;
-    else inner = `<a class="btn btn-mint" href="${esc(u.booking_url)}" target="_blank" rel="noopener">${ICON.plusSm}${tr("Boka tid hos {n}", { n: esc(u.name) })}</a>
-      <p>${tr("Bokningen görs i Microsoft Bookings och öppnas i en ny flik.")}</p>`;
-    box.innerHTML = `<h3>${tr("IT-support: boka tid")}</h3>${inner}`;
+    if (!u) inner = `<p>${t("Välj en handläggare för att kunna boka en tid.")}</p>`;
+    else if (!u.booking_url) inner = `<p>${t("{n} har ingen bokningssida inlagd. Den läggs in under Inställningar.", { n: esc(u.name) })}</p>`;
+    else inner = `<a class="btn btn-mint" href="${esc(u.booking_url)}" target="_blank" rel="noopener">${ICON.plusSm}${t("Boka tid hos {n}", { n: esc(u.name) })}</a>
+      <p>${t("Bokningen görs i Microsoft Bookings och öppnas i en ny flik.")}</p>`;
+    box.innerHTML = `<h3>${t("IT-support: boka tid")}</h3>${inner}`;
     box.hidden = false;
   };
   $("#t-cat").addEventListener("change", renderBooking);
   $("#t-ass").addEventListener("change", renderBooking);
-  renderBooking();
-  renderAside(); validate();
+  renderBooking(); renderReq(); validate();
   if (!id) $("#t-title").focus();
 
   const renderComments = list => {
     const box = $("#c-list"); if (!box) return;
-    box.innerHTML = list.length ? list.map(c => `<article class="comment">
-        <div class="c-meta"><b>${esc(c.author || tr("Okänd"))}</b><span>${fmtDT(c.created_at)}</span>
-          ${c.user_id === S.user.id || S.user.role === "admin" ? `<button type="button" class="textbtn danger c-del" data-id="${c.id}">${tr("Ta bort")}</button>` : ""}</div>
-        <div class="c-body">${esc(c.body)}</div></article>`).join("") : `<p class="muted" style="margin:0">${tr("Inga kommentarer ännu.")}</p>`;
+    box.innerHTML = list.length ? list.map(c => `<article class="tl-item">${ini(c.author || "?", "sm")}
+        <div class="tl-body"><div class="c-meta"><b>${esc(c.author || t("Okänd"))}</b><span>${fmtDT(c.created_at)}</span>
+          ${c.user_id === S.user.id || S.user.role === "admin" ? `<button type="button" class="textbtn danger c-del" data-id="${c.id}">${t("Ta bort")}</button>` : ""}</div>
+        <div class="c-body">${esc(c.body)}</div></div></article>`).join("")
+      : `<p class="muted tl-empty">${t("Inga kommentarer ännu. Skriv den första nedan.")}</p>`;
     $$(".c-del", box).forEach(b => b.addEventListener("click", async () => {
-      if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = tr("Bekräfta"); return; }
+      if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = t("Bekräfta"); return; }
       try { renderComments((await api("DELETE", "/api/comments/" + b.dataset.id)).comments); } catch (ex) { toast(ex.message, true); }
     }));
   };
   if (id) {
-    renderComments(t.comments || []);
+    renderComments(tk.comments || []);
     $("#c-add").addEventListener("click", async () => {
       const body = $("#c-body").value.trim();
       if (!body) { $("#c-body").focus(); return; }
-      try { renderComments((await api("POST", `/api/tickets/${id}/comments`, { body })).comments); $("#c-body").value = ""; toast(tr("Kommentaren sparades.")); }
+      try { renderComments((await api("POST", `/api/tickets/${id}/comments`, { body })).comments); $("#c-body").value = ""; toast(t("Kommentaren sparades.")); }
+      catch (ex) { toast(ex.message, true); }
+    });
+    $("#t-del").addEventListener("click", async e => {
+      const b = e.currentTarget;
+      if (!armedDel) { armedDel = true; b.classList.add("armed"); b.textContent = t("Bekräfta: ta bort"); return; }
+      try { await api("DELETE", "/api/tickets/" + id); toast(t("Ärende #{id} togs bort.", { id })); location.hash = "#/tickets"; }
       catch (ex) { toast(ex.message, true); }
     });
   }
 
-  if (id) $("#t-del").addEventListener("click", async e => {
-    const b = e.currentTarget;
-    if (!armedDel) { armedDel = true; b.classList.add("armed"); b.textContent = tr("Bekräfta: ta bort"); return; }
-    try { await api("DELETE", "/api/tickets/" + id); toast(tr("Ärende #{id} togs bort.", { id })); location.hash = "#/tickets"; }
-    catch (ex) { toast(ex.message, true); }
-  });
-
-  $("#tform").addEventListener("submit", async e => {
-    e.preventDefault();
+  async function save() {
     validate(); if ($("#t-save").disabled) return;
     const data = { title: $("#t-title").value, details: $("#t-details").value, priority: $("#t-prio").value,
       category_id: $("#t-cat").value || null, assignee_id: $("#t-ass").value || null, customer_id: custId };
     if (id && !$("#t-status").disabled) data.status = $("#t-status").value;
     $("#t-save").disabled = true;
     try {
-      if (id) { const r = await api("PUT", "/api/tickets/" + id, data); toast(tr("Ärendet sparades.") + notifyText(r)); pageTicket(id, {}); }
-      else { const r = await api("POST", "/api/tickets", data); toast(tr("Ärende #{id} skapades.", { id: r.id }) + notifyText(r)); location.hash = "#/tickets"; }
+      if (id) { const r = await api("PUT", "/api/tickets/" + id, data); toast(t("Ärendet sparades.") + notifyText(r)); pageTicket(id, {}); }
+      else { const r = await api("POST", "/api/tickets", data); toast(t("Ärende #{id} skapades.", { id: r.id }) + notifyText(r)); location.hash = "#/tickets/" + r.id; }
     } catch (ex) { toast(ex.message, true); validate(); }
-  });
+  }
+  $("#t-save").addEventListener("click", save);
 }
 
 function notifyText(r) {
@@ -637,6 +788,9 @@ function customerForm(c, p) {
     <h3>${t("Personligt")}</h3>${f("first_name", t("Förnamn"))}${f("last_name", t("Efternamn"))}
     <h3>${t("Företag")}</h3>${f("company", t("Företag"))}${f("title", t("Titel"))}
     <h3>${t("Kontakt")}</h3>${f("phone", t("Telefon"), "tel")}${f("email", t("E-post"), "email")}
+    <h3>${t("Tema")}</h3><select class="input" id="${p}-theme" aria-label="${t("Tema")}">
+      <option value="">${t("Standard (handläggarens eget tema)")}</option>
+      ${THEMES.map(x => `<option value="${x[0]}"${c.theme === x[0] ? " selected" : ""}>${esc(t(x[1]))} – ${esc(t(x[3]))}</option>`).join("")}</select>
     <p class="err" id="${p}-err" hidden></p>
     <div class="actions"><button type="button" class="textbtn" id="${p}-cancel">${t("Avbryt")}</button><button type="submit" class="btn btn-dark">${ICON.check}${t("Spara")}</button></div>
   </form>`;
@@ -647,6 +801,7 @@ function bindCustomerForm(scope, p, existingId, onSaved, onCancel) {
   $(`#${p}-form`, scope).addEventListener("submit", async e => {
     e.preventDefault();
     const data = {}; ["first_name", "last_name", "company", "title", "phone", "email"].forEach(k => data[k] = $(`#${p}-${k}`, scope).value.trim());
+    data.theme = $(`#${p}-theme`, scope).value;
     const err = $(`#${p}-err`, scope); err.hidden = true;
     if (!data.first_name) { err.textContent = t("Ange förnamn."); err.hidden = false; first.setAttribute("aria-invalid", "true"); return; }
     if (data.email && !EMAIL_RE.test(data.email)) { err.textContent = t("E-postadressen ser inte giltig ut."); err.hidden = false; return; }
@@ -657,11 +812,10 @@ function bindCustomerForm(scope, p, existingId, onSaved, onCancel) {
 
 /* =========================================================== KUNDER */
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZÅÄÖ".split("");
-async function pageCustomers(selId) {
-  const el = shell("customers", t("Beställare"), "dark-aside");
+async function renderCustomers(el, selId) {
   let customers = [], q = "", sel = selId, editing = false, creating = false;
   const csel = new Set(); let armedDel = false;
-  el.innerHTML = `<section class="work">
+  el.innerHTML = `<section class="req-main">
       <div class="toolbar">
         <label class="check"><input type="checkbox" id="cs-all"> ${t("Markera alla")}</label>
         <button class="textbtn danger" id="cs-del" type="button" disabled>${t("Ta bort")}</button>
@@ -683,18 +837,23 @@ async function pageCustomers(selId) {
     list.forEach(c => (groups[letterOf(c)] = groups[letterOf(c)] || []).push(c));
     $("#letters").innerHTML = ALPHABET.map(l => `<button type="button" class="${groups[l] ? "has" : ""}" ${groups[l] ? `data-l="${l}"` : "disabled"}>${l}</button>`).join("");
     $$("#letters button[data-l]").forEach(b => b.addEventListener("click", () => { const g = $("#grp-" + b.dataset.l); if (g) g.scrollIntoView({ behavior: "smooth", block: "start" }); }));
-    if (!list.length) { $("#ctable").innerHTML = `<div class="empty">${customers.length ? t("Ingen beställare matchar sökningen.") : t("Inga beställare ännu. Klicka <b>Ny beställare</b> för att lägga till den första.")}</div>`; updateSel(); return; }
+    if (!list.length) {
+      $("#ctable").innerHTML = customers.length ? emptyState(ICON.people, t("Ingen beställare matchar sökningen."))
+        : emptyState(ICON.people, t("Inga beställare ännu."), `<button class="btn btn-mint" type="button" id="es-new">${ICON.plusSm}${t("Ny beställare")}</button>`);
+      const b = $("#es-new"); if (b) b.addEventListener("click", () => $("#cs-new").click());
+      updateSel(); return;
+    }
     const keys = Object.keys(groups).sort((a, b) => a.localeCompare(b, "sv"));
     $("#ctable").innerHTML = `<table class="ctable"><thead><tr><th class="w-check"></th><th class="w-av"></th><th>${t("Namn")}</th><th>${t("Företag")}</th><th>${t("Telefon")}</th><th>${t("Öppna ärenden")}</th></tr></thead><tbody>
       ${keys.map(k => `<tr class="grp" id="grp-${esc(k)}"><td colspan="6"><span class="grp-badge">${esc(k)}</span></td></tr>` +
         groups[k].map(c => `<tr class="crow" data-id="${c.id}" aria-selected="${c.id === sel}">
           <td><input type="checkbox" class="csel" value="${c.id}" aria-label="${t("Markera {n}", { n: esc(c.name) })}"${csel.has(c.id) ? " checked" : ""}></td>
-          <td>${avatar("sm")}</td><td>${esc(c.name)}</td><td>${esc(c.company)}</td><td>${esc(c.phone)}</td><td>${c.open_count || 0}</td></tr>`).join("")).join("")}
+          <td>${ini(c.name, "sm")}</td><td>${esc(c.name)}</td><td>${esc(c.company)}</td><td>${esc(c.phone)}</td><td>${c.open_count || 0}</td></tr>`).join("")).join("")}
       </tbody></table>`;
     $$(".crow").forEach(r => r.addEventListener("click", e => {
       if (e.target.closest("input")) return;
       sel = +r.dataset.id; editing = false; creating = false;
-      history.replaceState(null, "", "#/customers/" + sel);
+      history.replaceState(null, "", "#/settings/requesters/" + sel);
       $$(".crow").forEach(x => x.setAttribute("aria-selected", String(+x.dataset.id === sel)));
       renderDetail();
     }));
@@ -714,9 +873,10 @@ async function pageCustomers(selId) {
       bindCustomerForm(a, "cc", null, async c => { creating = false; sel = c.id; await reload(); toast(t("{n} lades till.", { n: c.name })); }, () => { creating = false; renderDetail(); });
       return;
     }
-    if (!sel) { a.innerHTML = `<div class="hd"><h2>${t("Beställardetaljer")}</h2></div><p class="placeholder" style="margin-top:24px">${t("Välj en beställare i listan för att se kontaktuppgifter och ärenden.")}</p>`; return; }
+    if (!sel) { viewTheme(null); a.innerHTML = `<div class="hd"><h2>${t("Beställardetaljer")}</h2></div><p class="placeholder" style="margin-top:24px">${t("Välj en beställare i listan för att se kontaktuppgifter och ärenden.")}</p>`; return; }
     let c;
     try { c = await api("GET", "/api/customers/" + sel); } catch (e) { a.innerHTML = `<p class="placeholder">${esc(e.message)}</p>`; return; }
+    viewTheme(c.theme);
     if (editing) {
       a.innerHTML = `<div class="hd"><h2>${t("Redigera beställare")}</h2></div><div style="height:20px"></div>${customerForm(c, "ce")}`;
       bindCustomerForm(a, "ce", c.id, async () => { editing = false; await reload(); toast(t("Beställaren sparades.")); }, () => { editing = false; renderDetail(); });
@@ -724,15 +884,16 @@ async function pageCustomers(selId) {
     }
     a.innerHTML = `<div class="hd"><h2>${t("Beställardetaljer")}</h2></div>
       <div class="links"><button type="button" id="cd-edit">${t("Redigera")}</button><button type="button" id="cd-close">${t("Stäng")}</button></div>
-      ${avatar("lg")}
+      ${ini(c.name, "lg")}
       <div class="nm">${esc(c.name)}</div>
       <div class="co">${esc([c.company, c.title].filter(Boolean).join(", ")) || "&nbsp;"}</div>
       <div class="ct">${c.phone ? `<span>${esc(c.phone)}</span>` : ""}${c.email ? `<span>${esc(c.email)}</span>` : ""}${!c.phone && !c.email ? `<span>${t("Inga kontaktuppgifter")}</span>` : ""}</div>
+      <div class="ctheme">${ICON.palette}<span>${c.theme ? esc(themeName(c.theme)) : t("Standardtema")}</span></div>
       <div class="rt"><h3>${t("Senaste ärenden")}</h3><a class="btn btn-mint" href="#/tickets/new?customer=${c.id}">${ICON.plusSm}${t("Nytt")}</a></div>
       ${c.tickets.length ? c.tickets.map(t => `<a class="rtc" href="#/tickets/${t.id}"><div class="top"><span>#${t.id} · ${esc(tv(t.status))}${t.archived_at ? " · " + tr("arkiverat") : ""}</span><span>${fmtDate(t.created_at)}</span></div>
-        <div class="t">${esc(t.title)}</div>${t.details ? `<div class="d">${esc(t.details)}</div>` : ""}</a>`).join("") : `<p class="placeholder">${t("Inga ärenden ännu.")}</p>`}`;
+        <div class="t">${esc(t.title)}</div>${t.details ? `<div class="d">${esc(t.details)}</div>` : ""}</a>`).join("") : `<div class="dark-empty"><p>${t("Inga ärenden ännu.")}</p><a class="btn btn-mint" href="#/tickets/new?customer=${c.id}">${ICON.plusSm}${t("Skapa ärende")}</a></div>`}`;
     $("#cd-edit").addEventListener("click", () => { editing = true; renderDetail(); });
-    $("#cd-close").addEventListener("click", () => { sel = null; history.replaceState(null, "", "#/customers"); $$(".crow").forEach(x => x.setAttribute("aria-selected", "false")); renderDetail(); });
+    $("#cd-close").addEventListener("click", () => { sel = null; history.replaceState(null, "", "#/settings/requesters"); $$(".crow").forEach(x => x.setAttribute("aria-selected", "false")); renderDetail(); });
   };
 
   const reload = async () => {
@@ -758,15 +919,20 @@ async function pageCustomers(selId) {
 }
 
 /* =========================================================== INSTÄLLNINGAR */
-async function pageSettings() {
+async function pageSettings(tab, sub) {
   const el = shell("settings", t("Inställningar"), "single");
   const admin = S.user.role === "admin";
+  const TABS = [["account", t("Mitt konto")], ["requesters", t("Beställare")], ...(admin ? [["users", t("Användare")], ["statuses", t("Statusar")], ["categories", t("Kategorier")], ["mail", t("E-post")]] : []), ["export", t("Export och säkerhetskopia")]];
+  if (!TABS.some(x => x[0] === tab)) tab = "account";
   let editUser = null, addingUser = false, editCat = null, armedCat = null;
-  el.innerHTML = `<section class="work"><div class="settings">
-    <div style="display:flex;flex-direction:column;gap:28px">
-      ${admin ? `<div class="box" id="box-users"></div>` : ""}
-      <div class="box"><h2>${t("Mitt konto")}</h2><p class="lead">${esc(S.user.name)} · ${esc(S.user.email)}</p>
+  el.innerHTML = `<section class="work">
+    <nav class="stabs" role="tablist" aria-label="${t("Inställningar")}">${TABS.map(([k, l]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab}">${l}</button>`).join("")}</nav>
+    <div class="spanes">
+      ${admin ? `<div class="box" id="box-users" data-pane="users"></div>` : ""}
+      <div class="box" data-pane="account"><h2>${t("Mitt konto")}</h2><p class="lead">${esc(S.user.name)} · ${esc(S.user.email)}</p>
         <div class="pform"><h3>${t("Språk")}</h3><p class="muted" style="margin:0">${t("Gäller gränssnittet och mail som skickas till dig.")}</p>${langSwitch("box-lang")}</div>
+        <div class="pform" style="margin-top:22px"><h3>${t("Färgtema")}</h3><p class="muted" style="margin:0">${t("Sparas i den här webbläsaren.")}</p>
+          <div class="theme-pick" role="group" aria-label="${t("Färgtema")}">${THEMES.map(([k, n, d, cd, sw]) => `<button type="button" data-theme-k="${k}" aria-pressed="${(document.documentElement.dataset.theme || "lila") === k}"><span class="sw">${sw.map(c => `<i style="background:${c}"></i>`).join("")}</span><span class="tn">${t(n)}</span><span class="td">${t(d)}</span></button>`).join("")}</div></div>
         <form id="bk-form" class="pform" novalidate style="margin-top:22px">
           <h3>${t("Min bokningssida")}</h3>
           <p class="muted" style="margin:0">${t("Länken till din sida i Microsoft Bookings. Den visas i ärenden med kategorin för tidsbokning.")}</p>
@@ -782,17 +948,28 @@ async function pageSettings() {
           <p class="err" id="pw-err" hidden></p>
           <div class="actions"><span></span><button class="btn btn-dark" type="submit">${t("Byt lösenord")}</button></div>
         </form></div>
-    </div>
-    <div style="display:flex;flex-direction:column;gap:28px">
-      ${admin ? `<div class="box" id="box-status"></div><div class="box" id="box-mail"></div><div class="box" id="box-cats"></div>` : ""}
-      <div class="box"><h2>${t("Export")}</h2><p class="lead">${t("Ladda ner alla ärenden, arkivet, beställarregistret och kommentarerna som en Excel-fil.")}</p>
+      ${admin ? `<div class="box" id="box-status" data-pane="statuses"></div><div class="box" id="box-mail" data-pane="mail"></div><div class="box" id="box-cats" data-pane="categories"></div>` : ""}
+      <div class="box" data-pane="export"><h2>${t("Export")}</h2><p class="lead">${t("Ladda ner alla ärenden, arkivet, beställarregistret och kommentarerna som en Excel-fil.")}</p>
         <a class="btn" href="/api/export.xlsx?tz=${TZ()}&lang=${LANG}">${ICON.excel}${t("Exportera till Excel")}</a></div>
-      ${admin ? `<div class="box"><h2>${t("Säkerhetskopia")}</h2><p class="lead">${t("Ladda ner en kopia av hela databasen. Spara den på ett säkert ställe.")}</p>
+      ${admin ? `<div class="box" data-pane="export"><h2>${t("Säkerhetskopia")}</h2><p class="lead">${t("Ladda ner en kopia av hela databasen. Spara den på ett säkert ställe.")}</p>
         <a class="btn" href="/api/backup.db">${ICON.save}${t("Ladda ner säkerhetskopia")}</a></div>` : ""}
     </div>
-  </div></section>`;
+    <div class="req-pane" id="req-pane" data-pane="requesters"></div></section>`;
+  let reqRendered = false;
+  const showTab = k => {
+    $$(".stabs [data-tab]", el).forEach(b => b.setAttribute("aria-selected", String(b.dataset.tab === k)));
+    $$("[data-pane]", el).forEach(p => p.hidden = p.dataset.pane !== k);
+    $(".spanes", el).hidden = k === "requesters";
+    if (k === "requesters" && !reqRendered) { reqRendered = true; renderCustomers($("#req-pane"), k === tab ? sub : null); }
+  };
+  showTab(tab);
+  $$(".stabs [data-tab]", el).forEach(b => b.addEventListener("click", () => { history.replaceState(null, "", "#/settings/" + b.dataset.tab); showTab(b.dataset.tab); }));
 
   bindLang($(".box-lang", el).parentElement, route);
+  $$("[data-theme-k]", el).forEach(b => b.addEventListener("click", () => {
+    applyTheme(b.dataset.themeK); savePref("theme", { k: b.dataset.themeK });
+    $$("[data-theme-k]", el).forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+  }));
   $("#bk-form").addEventListener("submit", async e => {
     e.preventDefault();
     const err = $("#bk-err"); err.hidden = true;
@@ -823,7 +1000,7 @@ async function pageSettings() {
   const renderUsers = () => {
     const box = $("#box-users");
     box.innerHTML = `<h2>${t("Användare")}</h2><p class="lead">${t("Handläggare kan tilldelas ärenden. Administratörer kan även hantera användare och kategorier.")}</p>
-      <ul class="ulist">${S.users.map(u => editUser === u.id ? `<li style="display:block">${userForm(u, "uf")}</li>` : `<li>${avatar("sm")}
+      <ul class="ulist">${S.users.map(u => editUser === u.id ? `<li style="display:block">${userForm(u, "uf")}</li>` : `<li>${ini(u.name, "sm")}
         <div class="who"><div>${esc(u.name)}${u.id === S.user.id ? " (" + t("du") + ")" : ""}</div><div class="e">${esc(u.email)}</div></div>
         <span class="tag ${u.role === "admin" ? "admin" : ""}">${u.role === "admin" ? t("Administratör") : t("Handläggare")}</span>
         ${u.active ? "" : `<span class="tag off">${t("Inaktiv")}</span>`}

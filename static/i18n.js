@@ -23,6 +23,10 @@ const SV_ONE = {
 const SV = { "Beställare_1": "Beställare" };
 
 const EN = {
+  "Färgtema": "Colour theme", "Tema": "Theme", "Standard (handläggarens eget tema)": "Default (the agent's own theme)", "Standardtema": "Default theme", "Okänt tema.": "Unknown theme.", "mörklila med mintgrönt": "dark purple with mint green", "mörkblått med klarblått": "dark blue with bright blue", "neongrönt på svart": "neon green on black", "svart, vitt och grått": "black, white and grey", "Enligt Carpe Diem Beds riktlinjer": "Following the Carpe Diem Beds guidelines", "Sparas i den här webbläsaren.": "Saved in this browser.",
+  "Lila": "Purple", "Det ursprungliga temat": "The original theme", "Nordisk blågrå": "Nordic blue-grey", "Standard · lugn och professionell": "Default · calm and professional",
+  "Matrix: grön kod på svart": "Matrix: green code on black",
+
   "Beställare_1": "Requester",
   "1 ärende": "1 ticket",
   "Administratör": "Administrator",
@@ -294,6 +298,38 @@ const EN = {
   "Återställ filter": "Reset filters",
   "Öppna (ej avslutade)": "Open (not closed)",
   "Öppna ärenden": "Open tickets",
+  "Arkiverat": "Archived",
+  "Avmarkera": "Clear selection",
+  "Avslutat": "Closed",
+  "Beskrivning": "Description",
+  "Byt": "Change",
+  "Export och säkerhetskopia": "Export and backup",
+  "Filter": "Filter",
+  "Inga beställare ännu.": "No requesters yet.",
+  "Inga kommentarer ännu. Skriv den första nedan.": "No comments yet. Write the first one below.",
+  "Inga ärenden med beställare i perioden.": "No tickets with a requester in the period.",
+  "Inga ärenden skapades i perioden.": "No tickets were created in the period.",
+  "Inga öppna ärenden just nu.": "No open tickets right now.",
+  "Just nu": "Right now",
+  "nya jämfört med föregående {d} dagar": "new compared with the previous {d} days",
+  "Lika många nya som föregående {d} dagar": "Same number of new as the previous {d} days",
+  "Lägg till ny beställare": "Add new requester",
+  "Rensa alla": "Clear all",
+  "Rubrik för ärendet": "Ticket title",
+  "Senast ändrat": "Last updated",
+  "Skapa ärende": "Create ticket",
+  "Skapad": "Created",
+  "Skapat": "Created",
+  "Spara ändringar": "Save changes",
+  "Stäng filter": "Close filters",
+  "Ta bort filter {f}": "Remove filter {f}",
+  "Under perioden": "During the period",
+  "{a} av {b}": "{a} of {b}",
+  "{n} avslutade under samma period": "{n} closed in the same period",
+  "{n} fler nya än föregående {d} dagar": "{n} more new than the previous {d} days",
+  "{n} färre nya än föregående {d} dagar": "{n} fewer new than the previous {d} days",
+  "{n} markerade": "{n} selected",
+  "Ärendets uppgifter": "Ticket details",
   "inloggning": "sign in",
   "Återställ demodata": "Reset demo data",
   "Bekräfta: radera ändringar": "Confirm: discard changes",
@@ -302,6 +338,9 @@ const EN = {
   "Översikt": "Overview",
 };
 const EN_ONE = {
+  "{n} markerade": "1 selected",
+  "{n} fler nya än föregående {d} dagar": "1 more new than the previous {d} days",
+  "{n} färre nya än föregående {d} dagar": "1 fewer new than the previous {d} days",
   "{n} ärenden arkiverades.": "1 ticket archived.",
   "{n} ärenden togs bort.": "1 ticket deleted.",
   "{n} ärenden fick status {s}.": "1 ticket set to {s}.",
@@ -322,6 +361,7 @@ const DATA_EN = {
 
 /* Felmeddelanden från servern */
 const ERR_EN = {
+  "Okänt tema.": "Unknown theme.",
   "Ange SMTP-server.": "Enter an SMTP server.",
   "Ange ditt namn.": "Enter your name.",
   "Ange en giltig avsändaradress.": "Enter a valid sender address.",

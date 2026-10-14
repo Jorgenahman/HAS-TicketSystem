@@ -1,0 +1,22 @@
+# Databas och körningsdata – får aldrig hamna på GitHub
+data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Byggd demo (skapas med python demo/build.py)
+demo/dist/
+
+# Editor och operativsystem
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

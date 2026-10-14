@@ -1,5 +1,11 @@
 # Ändringslogg
 
+## 1.5
+- Nytt utseende: kompaktare sidomeny, knappen "Nytt ärende", nya KPI-kort, sökfält, filterchips och kontextuell markeringsrad i ärendelistan, ärendesida i två kolumner med kommentarer som tidslinje, tomma lägen och flikar under Inställningar.
+- Beställare ligger nu som flik under Inställningar istället för i sidomenyn.
+- Färgteman: Nordisk blågrå (standard), Lila, Carpe Diem · Matrix och Visual Guidelines 2025.
+- Beställare kan få ett eget tema som används när beställarens kort eller ärenden öppnas. Databasen får kolumnen `customers.theme` automatiskt vid start.
+
 ## 1.4
 - Gränssnittet finns på svenska och engelska. Språket väljs på inloggningssidan, i sidomenyn eller under Mitt konto.
 - Mail skickas på mottagarens språk, och Excel-exporten följer det valda språket.

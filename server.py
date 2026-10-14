@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS customers (
   title TEXT NOT NULL DEFAULT '',
   phone TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
+  theme TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
@@ -142,6 +143,9 @@ def init_db():
         con.execute("ALTER TABLE users ADD COLUMN booking_url TEXT NOT NULL DEFAULT ''")
     if "lang" not in cols:
         con.execute("ALTER TABLE users ADD COLUMN lang TEXT NOT NULL DEFAULT 'sv'")
+    ccols = [r[1] for r in con.execute("PRAGMA table_info(customers)").fetchall()]
+    if "theme" not in ccols:
+        con.execute("ALTER TABLE customers ADD COLUMN theme TEXT NOT NULL DEFAULT ''")
     con.execute("UPDATE tickets SET status='Klar' WHERE status='Avslutad'")
     if con.execute("SELECT COUNT(*) FROM statuses").fetchone()[0] == 0:
         for i, (n, c, l, col) in enumerate(DEFAULT_STATUSES):
@@ -298,7 +302,7 @@ def customer_public(row):
 TICKET_SELECT = """
 SELECT t.*, c.name AS category,
        cu.first_name || CASE WHEN cu.last_name <> '' THEN ' ' || cu.last_name ELSE '' END AS customer_name,
-       cu.company AS customer_company, cu.email AS customer_email, cu.phone AS customer_phone,
+       cu.company AS customer_company, cu.email AS customer_email, cu.phone AS customer_phone, cu.theme AS customer_theme,
        a.name AS assignee_name, a.email AS assignee_email, a.booking_url AS assignee_booking_url,
        cb.name AS created_by_name
 FROM tickets t
@@ -715,10 +719,15 @@ def require_staff(ctx):
     need(ctx["user"]["role"] in ("admin", "agent"), "Bara administratörer och handläggare kan ändra beställare.", 403)
 
 
+CUSTOMER_THEMES = ("", "lila", "blagra", "carpe", "cdb")
+
+
 def customer_fields(b):
     f = {k: s(b.get(k), 200) for k in ("first_name", "last_name", "company", "title", "phone", "email")}
     need(f["first_name"], "Ange förnamn.")
     need(not f["email"] or EMAIL_RE.match(f["email"]), "E-postadressen ser inte giltig ut.")
+    f["theme"] = s(b.get("theme"), 20)
+    need(f["theme"] in CUSTOMER_THEMES, "Okänt tema.")
     return f
 
 
@@ -752,8 +761,8 @@ def api_customer_create(ctx):
     require_staff(ctx)
     f = customer_fields(ctx["body"])
     t = now()
-    cur = ctx["con"].execute("""INSERT INTO customers(first_name,last_name,company,title,phone,email,created_at,updated_at)
-                                VALUES (:first_name,:last_name,:company,:title,:phone,:email,:t,:t)""", dict(f, t=t))
+    cur = ctx["con"].execute("""INSERT INTO customers(first_name,last_name,company,title,phone,email,theme,created_at,updated_at)
+                                VALUES (:first_name,:last_name,:company,:title,:phone,:email,:theme,:t,:t)""", dict(f, t=t))
     return customer_public(ctx["con"].execute("SELECT * FROM customers WHERE id=?", (cur.lastrowid,)).fetchone())
 
 
@@ -763,7 +772,7 @@ def api_customer_update(ctx, cid):
     f = customer_fields(ctx["body"])
     need(ctx["con"].execute("SELECT 1 FROM customers WHERE id=?", (int(cid),)).fetchone(), "Beställaren finns inte.", 404)
     ctx["con"].execute("""UPDATE customers SET first_name=:first_name,last_name=:last_name,company=:company,title=:title,
-                          phone=:phone,email=:email,updated_at=:t WHERE id=:id""", dict(f, t=now(), id=int(cid)))
+                          phone=:phone,email=:email,theme=:theme,updated_at=:t WHERE id=:id""", dict(f, t=now(), id=int(cid)))
     return customer_public(ctx["con"].execute("SELECT * FROM customers WHERE id=?", (int(cid),)).fetchone())
 
 

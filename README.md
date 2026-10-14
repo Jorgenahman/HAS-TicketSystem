@@ -1,6 +1,6 @@
 # Ärendehantering
 
-Ett internt ärendehanteringssystem med dashboard, ärenden, beställarregister, kommentarer, redigerbara statusar, inloggning, mail vid tilldelning och tidsbokning via Microsoft Bookings. Byggt för att köras på en Synology NAS.
+Ett internt ärendehanteringssystem med dashboard, ärenden, beställarregister, kommentarer, redigerbara statusar, färgteman, inloggning, mail vid tilldelning och tidsbokning via Microsoft Bookings. Byggt för att köras på en Synology NAS.
 
 - **Server:** Python 3.8+ med endast standardbiblioteket. Inga paket behöver installeras.
 - **Databas:** SQLite, i en enda fil (`data/arenden.db`).
@@ -11,7 +11,7 @@ Ett internt ärendehanteringssystem med dashboard, ärenden, beställarregister,
 | Fil / mapp | Vad det är |
 |---|---|
 | `server.py` | Webbserver, API och databaslogik |
-| `static/` | Webbgränssnittet (`index.html`, `app.js`, `app.css`) |
+| `static/` | Webbgränssnittet (`index.html`, `app.js`, `app.css`, `i18n.js`) |
 | `Dockerfile`, `docker-compose.yml` | För installation med Synology Container Manager |
 | `demo/` | Bygger en klickbar demo utan server (`python demo/build.py`) |
 | `data/` | Här ligger databasen. Mappen skapas automatiskt när servern körs direkt med Python. Med Container Manager måste du skapa den själv, se installationen nedan. Mappen finns inte i Git. |
@@ -165,6 +165,23 @@ Under **Kommentarer** i ett befintligt ärende kan handläggare och administrat�
 ## Beställare
 
 Beställarregistret (tidigare "Kunder") innehåller den som har beställt ärendet. Bara administratörer och handläggare kan lägga till, ändra och ta bort beställare. Beställare loggar inte in i systemet.
+
+Beställarna finns under **Inställningar → Beställare**, inte i sidomenyn. Gamla länkar till `#/customers` skickas dit automatiskt.
+
+## Färgteman
+
+Under **Inställningar → Mitt konto → Färgtema** väljer varje användare tema. Valet sparas i webbläsaren.
+
+| Tema | Färger |
+|---|---|
+| Nordisk blågrå (standard) | mörkblått med klarblått |
+| Lila | mörklila med mintgrönt, det ursprungliga temat |
+| Carpe Diem · Matrix | neongrönt på svart, terminaltypsnitt och fallande kod på inloggningssidan |
+| Visual Guidelines 2025 | svart, vitt och grått enligt Carpe Diem Beds riktlinjer, typsnitt Apex New eller Calibri |
+
+En beställare kan också få ett eget tema i rullistan **Tema** när beställaren läggs upp eller redigeras. När beställarens kort eller ärenden öppnas visas sidan i det temat. Väljs **Standard** används handläggarens eget tema.
+
+Typsnitten Barlow och Share Tech Mono hämtas från Google Fonts. Om NAS:en eller datorn inte når internet används ett systemtypsnitt istället.
 
 ## Säkerhetskopiering
 
